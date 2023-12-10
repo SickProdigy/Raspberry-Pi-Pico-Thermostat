@@ -1,6 +1,7 @@
-Testing gitea connection with vscode, seems https link had to remove s and connection went through.
+# Auto Garden 
+### Growing a garden with automation and raspberry pi pico.
 
-Testing 
-SickProdigy from home windows 11 pc vs code.
+<p>
+This will be a staging spot for all my python scripts mostly. Hopefully use this to update pico w in the future possibly? 
+</p>
 
-Had an error where I needed to sync, what does git fetch do?
