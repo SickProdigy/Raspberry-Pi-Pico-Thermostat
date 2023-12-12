@@ -5,6 +5,9 @@
 This will be a staging spot for all my python scripts mostly. Hopefully use this to update pico w in the future possibly? 
 </p>
 
+Other pages of concern:
+- [Items Needed](Items-Needed.md)
+
 Note 1:
 <p>
 Using thonny as my IDE for micropython on raspberry pi pico w.
