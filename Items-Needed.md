@@ -6,7 +6,7 @@
 
 Components Needed:
 - [ ] [Adafruit DS3231 (Precision RTC Breakout)](https://www.adafruit.com/product/3013)
-- [ ] [3vdc input 24-380vac output relay](https://amzn.to/41h5ESE)
+- [x] [3vdc input 24-380vac output relay](https://amzn.to/41h5ESE) [Picked up 4]
 - [ ] Temp Probe
 - [ ] Humidity Probe
 
