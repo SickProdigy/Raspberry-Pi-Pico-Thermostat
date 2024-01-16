@@ -6,7 +6,7 @@ This will be a staging spot for all my python scripts mostly. Hopefully use this
 </p>
 
 Other pages of concern:
-- [Items Needed](Items-Needed.md)
+- [Items Needed](/Items-Needed.md)
 
 Note 1:
 <p>
