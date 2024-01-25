@@ -13,7 +13,7 @@ while True:
     print(rom)
     tempC = ds_sensor.read_temp(rom)
     tempF = tempC * (9/5) +32    # convert to farenheit
-    print('temperature (ºC):', "{:.2f}".format(tempC))  # The result will have two decimal places {:.2f}
+    # print('temperature (ºC):', "{:.2f}".format(tempC))  # The result will have two decimal places {:.2f}
     print('temperature (ºF):', "{:.2f}".format(tempF))
     print()
   time.sleep(5) # the loop will repeat every 5 seconds
