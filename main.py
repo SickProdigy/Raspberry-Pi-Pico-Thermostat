@@ -6,7 +6,7 @@ from secrets import secrets
 
 # Load login data from different file for security!
 # ssid = secrets['ssid']
-# pw = secrets['pw']
+# pw = secrets['password']
 
 # Initialize pins
 contactorLights = Pin(18, Pin.OUT)
