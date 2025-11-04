@@ -4,44 +4,51 @@ import network
 import urequests as requests
 from secrets import secrets
 
-# Load login data from different file for security!
-# ssid = secrets['ssid']
-# pw = secrets['password']
-
 # Initialize pins
 contactorLights = Pin(18, Pin.OUT)
-led = machine.Pin("LED", machine.Pin.OUT)
+led = Pin("LED", Pin.OUT)
 
-
+# Initial state
 led.low()
-contactorLights.low() # sets to lowest setting 0 first. 
+contactorLights.low()
 
-contactorLights.toggle() # Toggle contactor on for testing
+# Network connection
+def connect_wifi():
+    wifi = network.WLAN(network.STA_IF)
+    wifi.active(True)
+    
+    print("Connecting to WiFi...", end="")
+    wifi.connect(secrets['ssid'], secrets['password'])
+    
+    # Wait for connection with timeout
+    max_wait = 10
+    while max_wait > 0:
+        if wifi.status() < 0 or wifi.status() >= 3:
+            break
+        max_wait -= 1
+        print(".", end="")
+        time.sleep(1)
+        
+    if wifi.isconnected():
+        print("\nConnected! Network config:", wifi.ifconfig())
+        led.on()
+        time.sleep(1)
+        led.off()
+        return wifi
+    else:
+        print("\nConnection failed!")
+        return None
 
-# Network connection going through
-wifi = network.WLAN(network.STA_IF)
-wifi.active(True)   # must capitalize boolean statements!
-wifi.connect(secrets['ssid'], secrets['password'])
+# Connect to WiFi
+wifi = connect_wifi()
 
-print(wifi.ifconfig())   # no ip being applied
-
-#Proof connected
-led.on()
-print('Connected to Wi-Fi network') # saying connected but not
-time.sleep(5)
-led.off()
-
-# If disconnect will flash light
-while wifi.isconnected() == False:
-  led.on()
-  time.sleep(0.5)
-  led.off()
-  time.sleep(0.5)
-
-# think the while loop will hold the next line from running, we will see
-
-# while True:
-#    led.toggle()
-#    utime.sleep(0.2)
-
-# Need to log time accurately. Connect to internet with wifi and set time. Start logging. Also need temp probes and how to pull temps
+# Connection monitoring loop
+while True:
+    if not wifi or not wifi.isconnected():
+        led.on()
+        time.sleep(0.5)
+        led.off()
+        time.sleep(0.5)
+        # Try to reconnect
+        wifi = connect_wifi()
+    time.sleep(1)
