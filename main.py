@@ -3,6 +3,8 @@ import time
 import network
 import urequests as requests
 from secrets import secrets
+from scripts.discord_webhook import send_discord_message
+
 
 # Initialize pins (LED light onboard)
 led = Pin("LED", Pin.OUT)
@@ -39,6 +41,16 @@ def connect_wifi():
 # Connect to WiFi
 wifi = connect_wifi()
 
+# Send startup message if connected
+if wifi and wifi.isconnected():
+    send_discord_message("Pico W online and connected ✅")
+
+
+# Throttle reconnect attempts
+RECONNECT_COOLDOWN_MS = 60000  # 60 seconds
+last_attempt_ms = time.ticks_ms()
+
+
 # Connection monitoring loop
 while True:
     if not wifi or not wifi.isconnected():
@@ -47,8 +59,15 @@ while True:
         time.sleep(0.2)
         led.off()
         time.sleep(0.2)
-        # Try to reconnect
-        wifi = connect_wifi()
+
+        # Only try to reconnect after cooldown
+        if time.ticks_diff(time.ticks_ms(), last_attempt_ms) >= RECONNECT_COOLDOWN_MS:
+            last_attempt_ms = time.ticks_ms()
+            wifi = connect_wifi()
+            # Notify only when connection is restored
+            if wifi and wifi.isconnected():
+                send_discord_message("WiFi connection restored 🔄")
+
     else:
         # Slow blink when connected
         led.on()
