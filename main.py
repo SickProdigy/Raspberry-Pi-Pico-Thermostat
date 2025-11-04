@@ -4,13 +4,10 @@ import network
 import urequests as requests
 from secrets import secrets
 
-# Initialize pins
-contactorLights = Pin(18, Pin.OUT)
+# Initialize pins (LED light onboard)
 led = Pin("LED", Pin.OUT)
-
 # Initial state
 led.low()
-contactorLights.low()
 
 # Network connection
 def connect_wifi():
@@ -45,10 +42,18 @@ wifi = connect_wifi()
 # Connection monitoring loop
 while True:
     if not wifi or not wifi.isconnected():
+        # Fast blink when disconnected
         led.on()
-        time.sleep(0.5)
+        time.sleep(0.2)
         led.off()
-        time.sleep(0.5)
+        time.sleep(0.2)
         # Try to reconnect
         wifi = connect_wifi()
-    time.sleep(1)
+    else:
+        # Slow blink when connected
+        led.on()
+        time.sleep(1)
+        led.off()
+        time.sleep(1)
+    
+    time.sleep(0.1)
