@@ -16,7 +16,7 @@ class TemperatureSensor:
         try:
             # Convert bytearray to bytes so they can be used as dict keys
             self.roms = [bytes(rom) for rom in self.ds_sensor.scan()]
-            print(f'Found {len(self.roms)} DS18X20 sensor(s)')
+            # print(f'Found {len(self.roms)} DS18X20 sensor(s)')
             return self.roms
         except Exception as e:
             print(f'Error scanning sensors: {e}')
@@ -62,14 +62,3 @@ class TemperatureSensor:
             print(f'Error reading temperatures: {e}')
         
         return results
-
-# Example usage / test code
-if __name__ == "__main__":
-    sensor = TemperatureSensor(pin=10)
-    
-    while True:
-        temps = sensor.read_all_temps(unit='F')
-        for rom, temp in temps.items():
-            print(f'Sensor {rom.hex()}: {temp:.2f}°F')
-        print()
-        time.sleep(5)
