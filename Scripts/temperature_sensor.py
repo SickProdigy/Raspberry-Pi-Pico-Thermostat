@@ -14,7 +14,8 @@ class TemperatureSensor:
     def scan_sensors(self):
         """Scan for connected DS18X20 sensors."""
         try:
-            self.roms = self.ds_sensor.scan()
+            # Convert bytearray to bytes so they can be used as dict keys
+            self.roms = [bytes(rom) for rom in self.ds_sensor.scan()]
             print(f'Found {len(self.roms)} DS18X20 sensor(s)')
             return self.roms
         except Exception as e:
