@@ -57,6 +57,7 @@ Pressing button grounds RUN and resets the Pico.
 ### 3. Software Setup
 
 **Install MicroPython:**
+
 1. Download [MicroPython firmware](https://micropython.org/download/rp2-pico-w/)
 2. Hold BOOTSEL button while plugging in Pico
 3. Copy `.uf2` file to the Pico drive
