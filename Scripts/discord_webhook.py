@@ -10,12 +10,18 @@ def _escape_json_str(s: str) -> str:
     s = s.replace("\t", "\\t")
     return s
 
-def send_discord_message(message, username="Auto Garden Bot"):
+def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
     resp = None
-    url = secrets.get('discord_webhook_url')
+    
+    # Use alert webhook if specified, otherwise normal webhook
+    if is_alert:
+        url = secrets.get('discord_alert_webhook_url') or secrets.get('discord_webhook_url')
+    else:
+        url = secrets.get('discord_webhook_url')
+    
     try:
         if not url:
-            print("Error: no webhook URL in secrets")
+            # print("DEBUG: no webhook URL in secrets")
             return False
 
         url = url.strip().strip('\'"')
@@ -32,14 +38,14 @@ def send_discord_message(message, username="Auto Garden Bot"):
         status = getattr(resp, "status", getattr(resp, "status_code", None))
 
         if status and 200 <= status < 300:
-            print("Discord message sent")
+            # print("Discord message sent")
             return True
         else:
-            print(f"Discord webhook failed with status {status}")
+            # print(f"Discord webhook failed with status {status}")
             return False
 
     except Exception as e:
-        print("Failed to send Discord message:", e)
+        # print("Failed to send Discord message:", e)
         return False
     finally:
         if resp:
