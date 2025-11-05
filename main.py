@@ -28,7 +28,7 @@ ac_controller = ACController(
 ac_monitor = ACMonitor(
     ac_controller=ac_controller,
     temp_sensor=sensors['inside'],  # <-- This is your inside temperature sensor
-    target_temp=75.0,
+    target_temp=77.0,
     temp_swing=1.0,
     interval=30
 )
