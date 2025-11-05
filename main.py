@@ -2,9 +2,10 @@ from machine import Pin
 import time
 from scripts.networking import connect_wifi
 from scripts.discord_webhook import send_discord_message
-from scripts.monitors import TemperatureMonitor, WiFiMonitor, ACMonitor, run_monitors
-from scripts.temperature_sensor import TemperatureSensor, get_configured_sensors
+from scripts.monitors import TemperatureMonitor, WiFiMonitor, ACMonitor, HeaterMonitor, run_monitors
+from scripts.temperature_sensor import TemperatureSensor  # Removed get_configured_sensors
 from scripts.air_conditioning import ACController
+from scripts.heating import HeaterController
 
 # Initialize pins (LED light onboard)
 led = Pin("LED", Pin.OUT)
@@ -58,10 +59,26 @@ ac_monitor = ACMonitor(
     interval=30         # check temp every x seconds
 )
 
+# Heater Controller options
+heater_controller = HeaterController(
+    relay_pin=16,
+    min_run_time=30,   # min run time in seconds (5 minutes)
+    min_off_time=5    # min off time in seconds (3 minutes)
+)
+
+heater_monitor = HeaterMonitor(
+    heater_controller=heater_controller,
+    temp_sensor=sensors['inside'],
+    target_temp=80.0,   # target temperature in Fahrenheit
+    temp_swing=2.0,     # temp swing
+    interval=30         # check temp every x seconds
+)
+
 # Set up monitors
 monitors = [
     WiFiMonitor(wifi, led, interval=5, reconnect_cooldown=60), # Wifi monitor, Check WiFi every 5s
     ac_monitor, # AC monitor
+    heater_monitor, # Heater monitor
     TemperatureMonitor( # Inside temperature monitor
         sensor=sensors['inside'],
         label=SENSOR_CONFIG['inside']['label'],
