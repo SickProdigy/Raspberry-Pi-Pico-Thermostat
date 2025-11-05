@@ -104,6 +104,52 @@ class TemperatureMonitor(Monitor):
         except Exception as e:
             print(f"Error logging temperature: {e}")
 
+class ACMonitor(Monitor):
+    """Monitor temperature and control AC automatically."""
+    def __init__(self, ac_controller, temp_sensor, target_temp=75.0, hysteresis=2.0, interval=30):
+        """
+        ac_controller: ACController instance
+        temp_sensor: TemperatureSensor instance (inside temp)
+        target_temp: Target temperature in °F
+        hysteresis: Temperature swing allowed (prevents rapid cycling)
+        interval: Seconds between checks
+        """
+        super().__init__(interval)
+        self.ac = ac_controller
+        self.sensor = temp_sensor
+        self.target_temp = target_temp
+        self.hysteresis = hysteresis
+        self.last_notified_state = None
+    
+    def run(self):
+        """Check temperature and control AC."""
+        temps = self.sensor.read_all_temps(unit='F')
+        if not temps:
+            return
+        
+        # Use first sensor reading (assuming single inside sensor)
+        current_temp = list(temps.values())[0]
+        
+        # Cooling logic with hysteresis
+        # Turn ON if: temp > target + hysteresis
+        # Turn OFF if: temp < target - hysteresis
+        
+        if current_temp > (self.target_temp + self.hysteresis):
+            # Too hot, turn AC on
+            if self.ac.turn_on():
+                if not self.last_notified_state:
+                    send_discord_message(f"❄️ AC turned ON - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
+                    self.last_notified_state = True
+        
+        elif current_temp < (self.target_temp - self.hysteresis):
+            # Cool enough, turn AC off
+            if self.ac.turn_off():
+                if self.last_notified_state:
+                    send_discord_message(f"✅ AC turned OFF - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
+                    self.last_notified_state = False
+        
+        # Else: within hysteresis range, maintain current state
+
 class WiFiMonitor(Monitor):
     """Monitor WiFi connection and handle reconnection."""
     def __init__(self, wifi, led, interval=5, reconnect_cooldown=60):
