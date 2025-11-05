@@ -25,41 +25,45 @@ class Monitor:
 
 class TemperatureMonitor(Monitor):
     """Monitor temperature sensors and report to Discord."""
-    def __init__(self, sensor, label="Temp", interval=300, alert_high=None, alert_low=None, log_file=None):
+    def __init__(self, sensor, label="Temp", interval=300, alert_high=None, alert_low=None, log_file=None, send_alerts_to_separate_channel=False):
         super().__init__(interval)
         self.sensor = sensor
         self.label = label  # e.g., "Inside" or "Outside"
         self.alert_high = alert_high
         self.alert_low = alert_low
         self.log_file = log_file
+        self.send_alerts_to_separate_channel = send_alerts_to_separate_channel
     
     def run(self):
         """Read all sensors and report temperatures."""
         temps = self.sensor.read_all_temps(unit='F')
         if not temps:
-            print(f"No temperature readings available for {self.label}")
+            # print(f"No temperature readings available for {self.label}")
             return
-        
-        temp_msg = f"🌡️ {self.label} Temperature:\n"
-        alerts = []
         
         for rom, temp in temps.items():
             sensor_id = rom.hex()[:8]
-            temp_msg += f"{temp:.1f}°F\n"
+            
+            # Build message with alert on same line if present
+            temp_msg = f"🌡️ {self.label} Temperature: {temp:.1f}°F"
+            has_alert = False
+            
+            if self.alert_high and temp > self.alert_high:
+                temp_msg += f" ⚠️ HIGH (threshold: {self.alert_high}°F)"
+                has_alert = True
+            elif self.alert_low and temp < self.alert_low:
+                temp_msg += f" ⚠️ LOW (threshold: {self.alert_low}°F)"
+                has_alert = True
+            
+            # Send to alert channel if out of range and configured to do so
+            if has_alert and self.send_alerts_to_separate_channel:
+                send_discord_message(temp_msg, is_alert=True)
+            else:
+                send_discord_message(temp_msg, is_alert=False)
             
             # Log to file if enabled
             if self.log_file:
                 self._log_temp(sensor_id, temp)
-            
-            if self.alert_high and temp > self.alert_high:
-                alerts.append(f"⚠️ {self.label} HIGH: {temp:.1f}°F (threshold: {self.alert_high}°F)")
-            if self.alert_low and temp < self.alert_low:
-                alerts.append(f"⚠️ {self.label} LOW: {temp:.1f}°F (threshold: {self.alert_low}°F)")
-        
-        send_discord_message(temp_msg.strip())
-        
-        for alert in alerts:
-            send_discord_message(alert)
     
     def _log_temp(self, sensor_id, temp):
         """Log temperature reading to file."""
@@ -100,7 +104,7 @@ class WiFiMonitor(Monitor):
             now = time.ticks_ms()
             if time.ticks_diff(now, self.last_reconnect_attempt) >= (self.reconnect_cooldown * 1000):
                 self.last_reconnect_attempt = now
-                print("Attempting WiFi reconnect...")
+                # print("Attempting WiFi reconnect...")
                 self.wifi = connect_wifi(self.led)
                 
                 if self.wifi and self.wifi.isconnected():
