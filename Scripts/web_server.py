@@ -76,7 +76,7 @@ class TempWebServer:
                 }}
                 body {{
                     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                    max-width: 900px;
+                    max-width: 1200px;
                     margin: 0 auto;
                     padding: 20px;
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -89,16 +89,24 @@ class TempWebServer:
                     margin-bottom: 30px;
                     text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
                 }}
+                .temp-grid {{
+                    display: grid;
+                    grid-template-columns: repeat(2, 1fr);
+                    gap: 20px;
+                    margin-bottom: 20px;
+                }}
                 .card {{
                     background: white;
                     border-radius: 15px;
                     padding: 25px;
-                    margin: 15px 0;
                     box-shadow: 0 8px 16px rgba(0,0,0,0.2);
                     transition: transform 0.2s;
                 }}
                 .card:hover {{
                     transform: translateY(-5px);
+                }}
+                .card.full-width {{
+                    margin: 15px 0;
                 }}
                 .temp-card {{
                     position: relative;
@@ -195,24 +203,31 @@ class TempWebServer:
                     font-size: 0.6em;
                     vertical-align: super;
                 }}
+                @media (max-width: 768px) {{
+                    .temp-grid {{
+                        grid-template-columns: 1fr;
+                    }}
+                }}
             </style>
         </head>
         <body>
             <h1>🌱 Auto Garden Dashboard</h1>
             
-            <div class="card temp-card">
-                <div class="temp-icon">🏠</div>
-                <div class="label">Indoor Climate</div>
-                <div class="temp-display inside">{inside_temp}<span class="degree">°F</span></div>
+            <div class="temp-grid">
+                <div class="card temp-card">
+                    <div class="temp-icon">🏠</div>
+                    <div class="label">Indoor Climate</div>
+                    <div class="temp-display inside">{inside_temp}<span class="degree">°F</span></div>
+                </div>
+                
+                <div class="card temp-card">
+                    <div class="temp-icon">🌤️</div>
+                    <div class="label">Outdoor Climate</div>
+                    <div class="temp-display outside">{outside_temp}<span class="degree">°F</span></div>
+                </div>
             </div>
             
-            <div class="card temp-card">
-                <div class="temp-icon">🌤️</div>
-                <div class="label">Outdoor Climate</div>
-                <div class="temp-display outside">{outside_temp}<span class="degree">°F</span></div>
-            </div>
-            
-            <div class="card">
+            <div class="card full-width">
                 <div class="status">
                     <div class="status-item">
                         <div class="status-icon">❄️</div>
