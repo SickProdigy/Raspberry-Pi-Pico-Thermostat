@@ -4,11 +4,12 @@ import ds18x20
 import time
 
 class TemperatureSensor:
-    def __init__(self, pin=10):
+    def __init__(self, pin=10, label=None):
         """Initialize DS18X20 temperature sensor on the specified pin."""
         self.ds_pin = machine.Pin(pin)
         self.ds_sensor = ds18x20.DS18X20(onewire.OneWire(self.ds_pin))
         self.roms = []
+        self.label = label  # e.g., "Inside" or "Outside"
         self.scan_sensors()
     
     def scan_sensors(self):
@@ -16,7 +17,7 @@ class TemperatureSensor:
         try:
             # Convert bytearray to bytes so they can be used as dict keys
             self.roms = [bytes(rom) for rom in self.ds_sensor.scan()]
-            # print(f'Found {len(self.roms)} DS18X20 sensor(s)')
+            print(f'Found {len(self.roms)} DS18X20 sensor(s) on {self.label or "pin"}')
             return self.roms
         except Exception as e:
             print(f'Error scanning sensors: {e}')
