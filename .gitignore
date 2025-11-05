@@ -3,3 +3,4 @@ secrets.py
 /pymakr-test/
 .gitignore
 .vscode/
+temp_logs.csv
