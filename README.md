@@ -23,6 +23,7 @@ This project automates garden monitoring using a Raspberry Pi Pico W with temper
 ### 1. Hardware Setup
 
 **Required Components:**
+
 - Raspberry Pi Pico W
 - DS18B20 temperature sensors (waterproof recommended)
 - 4.7kΩ resistor (pull-up for 1-Wire bus)
@@ -33,7 +34,8 @@ See the [Items Needed Wiki](https://gitea.rcs1.top/sickprodigy/Auto-Garden/wiki/
 ### 2. Wiring
 
 **DS18B20 Temperature Sensors:**
-```
+
+```text
 Sensor Wire    →  Pico Pin
 ─────────────────────────────
 Red (VDD)      →  3V3 (OUT) - Pin 36
@@ -45,9 +47,11 @@ Add 4.7kΩ resistor between Data line and 3.3V
 ```
 
 **Optional Reset Button:**
-```
+
+```text
 RUN pin  →  Button  →  GND
 ```
+
 Pressing button grounds RUN and resets the Pico.
 
 ### 3. Software Setup
@@ -58,6 +62,7 @@ Pressing button grounds RUN and resets the Pico.
 3. Copy `.uf2` file to the Pico drive
 
 **IDE Setup:**
+
 - Recommended: VS Code with [MicroPico extension](https://marketplace.visualstudio.com/items?itemName=paulober.pico-w-go) by paulober
 - Alternative: Thonny IDE
 
@@ -96,7 +101,8 @@ SENSOR_CONFIG = {
 ### 5. Upload & Run
 
 Upload all files to your Pico:
-```
+
+```text
 /
 ├── main.py
 ├── secrets.py
@@ -111,7 +117,7 @@ The Pico will auto-start `main.py` on boot.
 
 ## Project Structure
 
-```
+```text
 Auto-Garden/
 ├── main.py                      # Entry point, sets up monitors
 ├── secrets.py                   # WiFi & Discord credentials (gitignored)
@@ -130,12 +136,14 @@ Auto-Garden/
 - **Every 5 seconds:** WiFi connection check with auto-reconnect
 
 **Discord Channels:**
+
 - `discord_webhook_url`: Regular temperature updates, connection status
 - `discord_alert_webhook_url`: Critical temperature alerts (Inside sensor only)
 
 ## Temperature Logs
 
 Logs are saved to `/temp_logs.csv` on the Pico:
+
 ```csv
 2025-11-05 14:30:00,Inside,28000012,72.50
 2025-11-05 14:30:00,Outside,28000034,45.30
@@ -146,6 +154,7 @@ Format: `timestamp,location,sensor_id,temperature_f`
 ## Future Expansion
 
 ### Planned Features
+
 - **Humidity Sensors:** DHT22 or SHT31 for air humidity monitoring
 - **Soil Moisture:** Capacitive sensors for plant watering automation
 - **Relay Control:** 3V-32VDC SSR relays for switching AC, fans, heaters
@@ -153,24 +162,29 @@ Format: `timestamp,location,sensor_id,temperature_f`
 - **Light Monitoring:** LDR or BH1750 for grow light automation
 
 ### Relay Wiring (Future)
-```
+
+```text
 Pico 3.3V output → SSR relay input → High voltage device (120V/240V)
 ```
+
 Use solid-state relays (SSR) rated for your voltage/current needs.
 
 ## Troubleshooting
 
 **No temperature readings:**
+
 - Check 4.7kΩ pull-up resistor is connected
 - Verify sensor wiring (VDD to 3.3V, not 5V)
 - Check GPIO pin numbers in `SENSOR_CONFIG`
 
 **WiFi not connecting:**
+
 - Verify SSID/password in `secrets.py`
 - Check 2.4GHz WiFi (Pico W doesn't support 5GHz)
 - Look for connection messages in serial console
 
 **Discord messages not sending:**
+
 - Verify webhook URLs are correct
 - Test webhooks with curl/Postman first
 - Check Pico has internet access (ping test)
