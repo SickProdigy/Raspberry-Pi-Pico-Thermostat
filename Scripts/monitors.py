@@ -105,18 +105,10 @@ class TemperatureMonitor(Monitor):
             print(f"Error logging temperature: {e}")
 
 class ACMonitor(Monitor):
-    """Monitor temperature and control AC automatically."""
     def __init__(self, ac_controller, temp_sensor, target_temp=75.0, temp_swing=2.0, interval=30):
-        """
-        ac_controller: ACController instance
-        temp_sensor: TemperatureSensor instance (inside temp)
-        target_temp: Target temperature in °F
-        temp_swing: Temperature swing allowed (prevents rapid cycling)
-        interval: Seconds between checks
-        """
         super().__init__(interval)
         self.ac = ac_controller
-        self.sensor = temp_sensor
+        self.sensor = temp_sensor  # <-- This is set from main.py
         self.target_temp = target_temp
         self.temp_swing = temp_swing
         self.last_notified_state = None
