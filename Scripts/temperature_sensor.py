@@ -63,26 +63,3 @@ class TemperatureSensor:
             print(f'Error reading temperatures: {e}')
         
         return results
-
-# Sensor configuration registry
-SENSOR_CONFIG = {
-    'inside': {
-        'pin': 10,
-        'label': 'Inside',
-        'alert_high': 80.0,
-        'alert_low': 70.0
-    },
-    'outside': {
-        'pin': 11,
-        'label': 'Outside',
-        'alert_high': 85.0,
-        'alert_low': 68.0
-    }
-}
-
-def get_configured_sensors():
-    """Return dictionary of configured sensor instances."""
-    sensors = {}
-    for key, config in SENSOR_CONFIG.items():
-        sensors[key] = TemperatureSensor(pin=config['pin'], label=config['label'])
-    return sensors
