@@ -198,5 +198,5 @@ print("Press Ctrl+C to stop\n")
 # Main monitoring loop
 while True:
     run_monitors(monitors)
-    web_server.check_requests(sensors, ac_monitor, heater_monitor)
+    web_server.check_requests(sensors, ac_monitor, heater_monitor, schedule_monitor)
     time.sleep(0.1)
