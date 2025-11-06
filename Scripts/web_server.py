@@ -80,7 +80,8 @@ class TempWebServer:
                 'heater_target': 80.0,
                 'heater_swing': 2.0,
                 'schedules': [],
-                'schedule_enabled': False
+                'schedule_enabled': False,
+                'permanent_hold': False
             }
     
     def _handle_schedule_update(self, request, sensors, ac_monitor, heater_monitor, schedule_monitor):
@@ -97,33 +98,74 @@ class TempWebServer:
             # Load current config
             config = self._load_config()
             
-            # Check if this is a "Resume Schedule" request
-            if params.get('resume_schedule') == 'true':
+            # ===== START: Handle mode actions =====
+            mode_action = params.get('mode_action', '')
+            
+            if mode_action == 'resume':
+                # Resume automatic scheduling
                 config['schedule_enabled'] = True
+                config['permanent_hold'] = False
                 
-                # Save to file
                 if self._save_config_to_file(config):
-                    print("▶️ Schedule resumed")
+                    print("▶️ Schedule resumed - Automatic mode")
                     
-                    # Reload schedule monitor
                     if schedule_monitor:
                         schedule_monitor.reload_config(config)
                 
-                # Send Discord notification
                 try:
                     from scripts.discord_webhook import send_discord_message
-                    message = "▶️ Schedule resumed - Automatic temperature control active"
-                    send_discord_message(message)
+                    send_discord_message("▶️ Schedule resumed - Automatic temperature control active")
                 except:
                     pass
                 
                 return self._get_status_page(sensors, ac_monitor, heater_monitor, show_success=True)
             
-            # Otherwise, handle normal schedule update
-            # Update schedule enabled status
-            config['schedule_enabled'] = params.get('schedule_enabled') == 'on'
+            elif mode_action == 'temporary_hold':
+                # Enter temporary hold (pause schedules temporarily)
+                config['schedule_enabled'] = False
+                config['permanent_hold'] = False
+                
+                if self._save_config_to_file(config):
+                    print("⏸️ Temporary hold activated")
+                    
+                    if schedule_monitor:
+                        schedule_monitor.reload_config(config)
+                
+                try:
+                    from scripts.discord_webhook import send_discord_message
+                    send_discord_message("⏸️ Temporary hold - Schedules paused, manual control active")
+                except:
+                    pass
+                
+                return self._get_status_page(sensors, ac_monitor, heater_monitor, show_success=True)
             
-            # Parse schedules
+            elif mode_action == 'permanent_hold':
+                # Enter permanent hold (disable schedules permanently)
+                config['schedule_enabled'] = False
+                config['permanent_hold'] = True
+                
+                if self._save_config_to_file(config):
+                    print("🛑 Permanent hold activated")
+                    
+                    if schedule_monitor:
+                        schedule_monitor.reload_config(config)
+                
+                try:
+                    from scripts.discord_webhook import send_discord_message
+                    send_discord_message("🛑 Permanent hold - Schedules disabled, manual control only")
+                except:
+                    pass
+                
+                return self._get_status_page(sensors, ac_monitor, heater_monitor, show_success=True)
+            # ===== END: Handle mode actions =====
+            
+            elif mode_action == 'save_schedules':
+                # Just fall through to schedule parsing below
+                pass
+            # ===== END: Handle mode actions =====
+            
+            # ===== START: Handle schedule configuration save =====
+            # Parse schedules from form
             schedules = []
             for i in range(4):
                 time_key = 'schedule_{}_time'.format(i)
@@ -144,22 +186,22 @@ class TempWebServer:
             
             # Save to file
             if self._save_config_to_file(config):
-                print("Schedule settings saved")
+                print("Schedule configuration saved")
                 
-                # Reload schedule monitor config
                 if schedule_monitor:
                     schedule_monitor.reload_config(config)
             
             # Send Discord notification
             try:
                 from scripts.discord_webhook import send_discord_message
-                status = "enabled" if config['schedule_enabled'] else "disabled"
-                message = "📅 Schedules updated ({}) - {} schedules configured".format(
-                    status, len(schedules)
+                mode = "automatic" if config.get('schedule_enabled') else "hold"
+                message = "📅 Schedules updated ({} mode) - {} schedules configured".format(
+                    mode, len(schedules)
                 )
                 send_discord_message(message)
             except:
                 pass
+            # ===== END: Handle schedule configuration save =====
                 
         except Exception as e:
             print("Error updating schedule: {}".format(e))
@@ -209,7 +251,8 @@ class TempWebServer:
             # ===== START: Disable scheduling and enter HOLD mode =====
             if config.get('schedule_enabled'):
                 config['schedule_enabled'] = False
-                print("⏸️ Schedule disabled - entering HOLD mode")
+                config['permanent_hold'] = False  # ✅ ADD THIS - ensure it's temporary
+                print("⏸️ Schedule disabled - entering TEMPORARY HOLD mode")
                 
                 # Reload schedule monitor to disable it
                 if schedule_monitor:
@@ -279,22 +322,26 @@ class TempWebServer:
             # Load config
             config = self._load_config()
             
-            # **NEW: Check if in HOLD mode**
-            is_hold_mode = not config.get('schedule_enabled', False) and len(config.get('schedules', [])) > 0
+            # ===== START: Determine schedule status display =====
+            has_schedules = len([s for s in config.get('schedules', []) if s.get('time')]) > 0
             
-            # Build schedule display
-            if is_hold_mode:
-                schedule_status = "HOLD MODE"
-                schedule_color = "#f39c12"  # Orange color for hold
-                schedule_icon = "⏸️"
-            elif config.get('schedule_enabled'):
-                schedule_status = "ENABLED"
-                schedule_color = "#2ecc71"
-                schedule_icon = "✅"
-            else:
-                schedule_status = "DISABLED"
+            if not has_schedules:
+                schedule_status = "NO SCHEDULES"
                 schedule_color = "#95a5a6"
                 schedule_icon = "⚠️"
+            elif config.get('schedule_enabled'):
+                schedule_status = "AUTOMATIC"
+                schedule_color = "#2ecc71"
+                schedule_icon = "✅"
+            elif config.get('permanent_hold', False):
+                schedule_status = "PERMANENT HOLD"
+                schedule_color = "#e74c3c"
+                schedule_icon = "🛑"
+            else:
+                schedule_status = "TEMPORARY HOLD"
+                schedule_color = "#f39c12"
+                schedule_icon = "⏸️"
+            # ===== END: Determine schedule status display =====
             
             # Build schedule cards
             schedule_cards = ""
@@ -316,8 +363,8 @@ class TempWebServer:
                         </div>
                     </div>
                     """.format(
-                        time=schedule.get('time', 'N/A'),
-                        name=schedule.get('name', 'Unnamed'),
+                        time=time_value,      # Use decoded value
+                        name=name_value,      # Use decoded value
                         ac_temp=schedule.get('ac_target', 'N/A'),
                         heater_temp=schedule.get('heater_target', 'N/A')
                     )
@@ -343,14 +390,17 @@ class TempWebServer:
             outside_temp_str = "{:.1f}".format(outside_temp) if isinstance(outside_temp, float) else str(outside_temp)
             
             # ===== START: Add HOLD mode banner =====
-            # Check if in HOLD mode (schedules exist but are disabled)
-            is_hold_mode = not config.get('schedule_enabled', False) and len(config.get('schedules', [])) > 0
-            
             hold_banner = ""
-            if is_hold_mode:
+            if config.get('permanent_hold', False):
+                hold_banner = """
+                <div style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); animation: fadeIn 0.5s;">
+                    🛑 PERMANENT HOLD - Schedules disabled (Manual control only)
+                </div>
+                """
+            elif not config.get('schedule_enabled', False) and has_schedules:
                 hold_banner = """
                 <div style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); animation: fadeIn 0.5s;">
-                    ⏸️ HOLD MODE ACTIVE - Manual settings in use (Schedule paused)
+                    ⏸️ TEMPORARY HOLD - Manual override active (Schedule paused)
                 </div>
                 """
             # ===== END: Add HOLD mode banner =====
@@ -683,38 +733,94 @@ class TempWebServer:
         while len(schedules) < 4:
             schedules.append({'time': '', 'name': '', 'ac_target': 77.0, 'heater_target': 80.0})
         
-        enabled_checked = 'checked' if config.get('schedule_enabled') else ''
+        # ===== START: Determine current mode =====
+        # Check if schedules exist
+        has_schedules = len([s for s in schedules if s.get('time')]) > 0
         
-        # Check if in HOLD mode
-        is_hold_mode = not config.get('schedule_enabled', False) and len(config.get('schedules', [])) > 0
+        # Determine mode based on config
+        if not has_schedules:
+            current_mode = "no_schedules"  # No schedules configured yet
+        elif config.get('schedule_enabled'):
+            current_mode = "automatic"  # Schedules are running
+        elif config.get('permanent_hold', False):
+            current_mode = "permanent_hold"  # User disabled schedules permanently
+        else:
+            current_mode = "temporary_hold"  # Manual override (HOLD mode)
+        # ===== END: Determine current mode =====
         
-        # Build header with toggle or resume button
-        if is_hold_mode:
-            # Show Resume Schedule button instead of toggle
-            header = """
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="color: #34495e; margin: 0;">⚙️ Edit Schedules</h3>
-                <button type="submit" name="resume_schedule" value="true" style="padding: 10px 20px; background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: transform 0.2s;">
-                    ▶️ Resume Schedule
-                </button>
+        # ===== START: Build mode control buttons =====
+        if current_mode == "no_schedules":
+            # No mode buttons if no schedules configured
+            mode_buttons = """
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; text-align: center; color: #7f8c8d; margin-bottom: 20px;">
+                ℹ️ Configure schedules below, then choose a mode
             </div>
             """
-        else:
-            # Show toggle switch for enable/disable
-            header = """
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="color: #34495e; margin: 0;">⚙️ Edit Schedules</h3>
-                <label class="toggle-switch">
-                    <input type="checkbox" name="schedule_enabled" {enabled_checked}>
-                    <span class="slider"></span>
-                </label>
+        elif current_mode == "automatic":
+            # Automatic mode active
+            mode_buttons = """
+            <div style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+                <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">
+                    ✅ Automatic Mode Active
+                </div>
+                <div style="font-size: 14px; margin-bottom: 15px;">
+                    Temperatures automatically adjust based on schedule
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="submit" name="mode_action" value="temporary_hold" style="padding: 8px 16px; background: #f39c12; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                        ⏸️ Temporary Hold
+                    </button>
+                    <button type="submit" name="mode_action" value="permanent_hold" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                        🛑 Permanent Hold
+                    </button>
+                </div>
             </div>
-            """.format(enabled_checked=enabled_checked)
+            """
+        elif current_mode == "temporary_hold":
+            # Temporary hold (manual override)
+            mode_buttons = """
+            <div style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+                <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">
+                    ⏸️ Temporary Hold Active
+                </div>
+                <div style="font-size: 14px; margin-bottom: 15px;">
+                    Manual settings in use - Schedule paused
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="submit" name="mode_action" value="resume" style="padding: 8px 16px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                        ▶️ Resume Schedule
+                    </button>
+                    <button type="submit" name="mode_action" value="permanent_hold" style="padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                        🛑 Make Permanent
+                    </button>
+                </div>
+            </div>
+            """
+        else:  # permanent_hold
+            # Permanent hold (schedules disabled by user)
+            mode_buttons = """
+            <div style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 15px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
+                <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">
+                    🛑 Permanent Hold Active
+                </div>
+                <div style="font-size: 14px; margin-bottom: 15px;">
+                    Schedules disabled - Manual control only
+                </div>
+                <div style="display: flex; gap: 10px; justify-content: center;">
+                    <button type="submit" name="mode_action" value="resume" style="padding: 8px 16px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                        ▶️ Enable Schedules
+                    </button>
+                </div>
+            </div>
+            """
+        # ===== END: Build mode control buttons =====
         
         form = """
         <form method="POST" action="/schedule" class="controls" style="margin-top: 20px;">
-            {header}
-        """.format(header=header)
+            <h3 style="color: #34495e; margin-bottom: 15px;">⚙️ Schedule Configuration</h3>
+            
+            {mode_buttons}
+        """.format(mode_buttons=mode_buttons)
         
         for i, schedule in enumerate(schedules[:4]):
             form += """
@@ -746,7 +852,7 @@ class TempWebServer:
         
         form += """
             <div class="control-group" style="margin-top: 20px;">
-                <button type="submit" class="btn">💾 Save Schedule</button>
+                <button type="submit" name="mode_action" value="save_schedules" class="btn">💾 Save Schedule Changes</button>
             </div>
         </form>
         """
