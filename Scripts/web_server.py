@@ -182,29 +182,31 @@ class TempWebServer:
             # Load current config
             config = self._load_config()
             
-            # Update AC settings
+            # ===== START: Update AC Settings =====
             if 'ac_target' in params and ac_monitor:
-                ac_monitor.target_temp = params['ac_target']
-                config['ac_target'] = params['ac_target']
+                ac_monitor.target_temp = params['ac_target']  # Update monitor
+                config['ac_target'] = params['ac_target']      # Update config
                 print("AC target updated to {}°F".format(params['ac_target']))
             
             if 'ac_swing' in params and ac_monitor:
-                ac_monitor.temp_swing = params['ac_swing']
-                config['ac_swing'] = params['ac_swing']
+                ac_monitor.temp_swing = params['ac_swing']    # Update monitor
+                config['ac_swing'] = params['ac_swing']        # Update config
                 print("AC swing updated to {}°F".format(params['ac_swing']))
+            # ===== END: Update AC Settings =====
             
-            # Update heater settings
+            # ===== START: Update Heater Settings =====
             if 'heater_target' in params and heater_monitor:
-                heater_monitor.target_temp = params['heater_target']
-                config['heater_target'] = params['heater_target']
+                heater_monitor.target_temp = params['heater_target']  # Update monitor
+                config['heater_target'] = params['heater_target']      # Update config
                 print("Heater target updated to {}°F".format(params['heater_target']))
             
             if 'heater_swing' in params and heater_monitor:
-                heater_monitor.temp_swing = params['heater_swing']
-                config['heater_swing'] = params['heater_swing']
+                heater_monitor.temp_swing = params['heater_swing']    # Update monitor
+                config['heater_swing'] = params['heater_swing']        # Update config
                 print("Heater swing updated to {}°F".format(params['heater_swing']))
+            # ===== END: Update Heater Settings =====
             
-            # **NEW: Disable scheduling and enter HOLD mode**
+            # ===== START: Disable scheduling and enter HOLD mode =====
             if config.get('schedule_enabled'):
                 config['schedule_enabled'] = False
                 print("⏸️ Schedule disabled - entering HOLD mode")
@@ -212,12 +214,14 @@ class TempWebServer:
                 # Reload schedule monitor to disable it
                 if schedule_monitor:
                     schedule_monitor.reload_config(config)
+            # ===== END: Disable scheduling and enter HOLD mode =====
             
-            # Save settings to file
+            # ===== START: Save settings to file =====
             if self._save_config_to_file(config):
                 print("Settings persisted to disk")
+            # ===== END: Save settings to file =====
             
-            # Send Discord notification
+            # ===== START: Send Discord notification =====
             try:
                 from scripts.discord_webhook import send_discord_message
                 ac_target_str = str(params.get('ac_target', 'N/A'))
@@ -231,6 +235,17 @@ class TempWebServer:
                 send_discord_message(message)
             except Exception as discord_error:
                 print("Discord notification failed: {}".format(discord_error))
+            # ===== END: Send Discord notification =====
+            
+            # ===== START: Debug output =====
+            print("DEBUG: After update, monitor values are:")
+            if ac_monitor:
+                print("  AC target: {}".format(ac_monitor.target_temp))
+                print("  AC swing: {}".format(ac_monitor.temp_swing))
+            if heater_monitor:
+                print("  Heater target: {}".format(heater_monitor.target_temp))
+                print("  Heater swing: {}".format(heater_monitor.temp_swing))
+            # ===== END: Debug output =====
             
         except Exception as e:
             print("Error updating settings: {}".format(e))
@@ -285,6 +300,12 @@ class TempWebServer:
             schedule_cards = ""
             if config.get('schedules'):
                 for schedule in config.get('schedules', []):
+                    # ===== START: Decode URL-encoded values =====
+                    # Replace %3A with : and + with space
+                    time_value = schedule.get('time', 'N/A').replace('%3A', ':')
+                    name_value = schedule.get('name', 'Unnamed').replace('+', ' ')
+                    # ===== END: Decode URL-encoded values =====
+                    
                     schedule_cards += """
                     <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
                         <div style="font-weight: bold; color: #34495e; margin-bottom: 5px;">
