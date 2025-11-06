@@ -27,6 +27,7 @@ from scripts.air_conditioning import ACController
 from scripts.heating import HeaterController
 from scripts.web_server import TempWebServer
 from scripts.scheduler import ScheduleMonitor  # NEW: Import scheduler for time-based temp changes
+from scripts.memory_check import MemoryMonitor, check_memory_once  # NEW: Import memory checker
 
 # ===== START: Configuration Loading =====
 # Load saved settings from config.json file on Pico
@@ -38,16 +39,55 @@ def load_config():
             print("Loaded saved settings from config.json")
             return config
     except:
-        # If file doesn't exist or is corrupted, use defaults
-        print("No saved config found, using defaults")
-        return {
-            'ac_target': 77.0,         # Default AC target temp
+        # If file doesn't exist or is corrupted, create default config
+        print("No saved config found, creating default config.json...")
+        
+        default_config = {
+            'ac_target': 75.0,         # Default AC target temp
             'ac_swing': 1.0,           # Default AC tolerance (+/- degrees)
-            'heater_target': 80.0,     # Default heater target temp
+            'heater_target': 72.0,     # Default heater target temp
             'heater_swing': 2.0,       # Default heater tolerance (+/- degrees)
-            'schedules': [],           # No schedules by default
-            'schedule_enabled': False  # Schedules disabled by default
+            'schedules': [             # Default 4 schedules
+                {
+                    'time': '06:00',
+                    'name': 'Morning',
+                    'ac_target': 75.0,
+                    'heater_target': 72.0
+                },
+                {
+                    'time': '12:00',
+                    'name': 'Midday',
+                    'ac_target': 75.0,
+                    'heater_target': 72.0
+                },
+                {
+                    'time': '18:00',
+                    'name': 'Evening',
+                    'ac_target': 75.0,
+                    'heater_target': 72.0
+                },
+                {
+                    'time': '22:00',
+                    'name': 'Night',
+                    'ac_target': 75.0,
+                    'heater_target': 72.0
+                }
+            ],
+            'schedule_enabled': False, # Schedules disabled by default (user can enable via web)
+            'permanent_hold': False    # Permanent hold disabled by default
         }
+        
+        # ===== START: Save default config to file =====
+        try:
+            with open('config.json', 'w') as f:
+                json.dump(default_config, f)
+            print("✅ Default config.json created successfully with 4 sample schedules")
+        except Exception as e:
+            print("⚠️ Warning: Could not create config.json: {}".format(e))
+            print("   (Program will continue with defaults in memory)")
+        # ===== END: Save default config to file =====
+        
+        return default_config
 
 # Load configuration from file
 config = load_config()
@@ -196,6 +236,11 @@ if config.get('schedules'):
 print("="*50 + "\n")
 # ===== END: Print Current Settings =====
 
+# ===== START: Startup Memory Check =====
+# Check memory usage after all imports and initialization
+check_memory_once()
+# ===== END: Startup Memory Check =====
+
 # ===== START: Monitor Setup =====
 # Set up all monitoring systems (run in order during main loop)
 monitors = [
@@ -204,6 +249,9 @@ monitors = [
     
     # Schedule monitor: Changes temp targets based on time of day
     schedule_monitor,
+
+    # Memory monitor: Checks RAM usage every 5 minutes
+    MemoryMonitor(interval=300),  # 300 seconds = 5 minutes
     
     # AC monitor: Automatically turns AC on/off based on temperature
     ac_monitor,
