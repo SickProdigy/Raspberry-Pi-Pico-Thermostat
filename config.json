@@ -2,5 +2,32 @@
     "ac_target": 77.0,
     "ac_swing": 1.0,
     "heater_target": 80.0,
-    "heater_swing": 2.0
+    "heater_swing": 2.0,
+    "schedules": [
+        {
+            "time": "06:00",
+            "ac_target": 75.0,
+            "heater_target": 78.0,
+            "name": "Morning"
+        },
+        {
+            "time": "12:00",
+            "ac_target": 77.0,
+            "heater_target": 80.0,
+            "name": "Midday"
+        },
+        {
+            "time": "18:00",
+            "ac_target": 76.0,
+            "heater_target": 79.0,
+            "name": "Evening"
+        },
+        {
+            "time": "22:00",
+            "ac_target": 74.0,
+            "heater_target": 77.0,
+            "name": "Night"
+        }
+    ],
+    "schedule_enabled": true
 }

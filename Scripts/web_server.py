@@ -132,7 +132,46 @@ class TempWebServer:
         
         # Get current time
         current_time = time.localtime()
-        time_str = f"{current_time[0]}-{current_time[1]:02d}-{current_time[2]:02d} {current_time[3]:02d}:{current_time[4]:02d}:{current_time[5]:02d}"
+        time_str = "{}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(
+            current_time[0], current_time[1], current_time[2], 
+            current_time[3], current_time[4], current_time[5]
+        )
+        
+        # Load config to show schedules
+        try:
+            import json
+            with open('config.json', 'r') as f:
+                config = json.load(f)
+        except:
+            config = {'schedules': [], 'schedule_enabled': False}
+        
+        # Build schedule display
+        schedule_status = "ENABLED ✅" if config.get('schedule_enabled') else "DISABLED ⚠️"
+        
+        if config.get('schedules'):
+            schedule_cards = ""
+            for schedule in config.get('schedules', []):
+                schedule_cards += """
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 8px;">
+                    <div style="font-weight: bold; color: #34495e; margin-bottom: 5px;">
+                        🕐 {time} - {name}
+                    </div>
+                    <div style="color: #7f8c8d; font-size: 14px;">
+                        AC: {ac_temp}°F | Heater: {heater_temp}°F
+                    </div>
+                </div>
+                """.format(
+                    time=schedule.get('time', 'N/A'),
+                    name=schedule.get('name', 'Unnamed'),
+                    ac_temp=schedule.get('ac_target', 'N/A'),
+                    heater_temp=schedule.get('heater_target', 'N/A')
+                )
+        else:
+            schedule_cards = """
+            <div style="text-align: center; color: #95a5a6; grid-column: 1 / -1;">
+                No schedules configured
+            </div>
+            """
         
         # Success message
         success_html = """
@@ -425,6 +464,19 @@ class TempWebServer:
                 </form>
             </div>
             
+            <div class="card full-width">
+                <h2 style="text-align: center; color: #34495e; margin-bottom: 20px;">📅 Daily Schedule</h2>
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <strong>Status:</strong> 
+                    <span style="color: {schedule_color}; font-weight: bold;">
+                        {schedule_status}
+                    </span>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    {schedule_cards}
+                </div>
+            </div>
+            
             <div class="footer">
                 ⏰ Last updated: {time}<br>
                 🔄 Auto-refresh every 30 seconds
@@ -433,8 +485,8 @@ class TempWebServer:
         </html>
         """.format(
             success_message=success_html,
-            inside_temp=f"{inside_temp:.1f}" if isinstance(inside_temp, float) else inside_temp,
-            outside_temp=f"{outside_temp:.1f}" if isinstance(outside_temp, float) else outside_temp,
+            inside_temp="{:.1f}".format(inside_temp) if isinstance(inside_temp, float) else inside_temp,
+            outside_temp="{:.1f}".format(outside_temp) if isinstance(outside_temp, float) else outside_temp,
             ac_status=ac_status,
             ac_class="on" if ac_status == "ON" else "off",
             heater_status=heater_status,
@@ -443,6 +495,9 @@ class TempWebServer:
             ac_swing=ac_monitor.temp_swing if ac_monitor else "N/A",
             heater_target=heater_monitor.target_temp if heater_monitor else "N/A",
             heater_swing=heater_monitor.temp_swing if heater_monitor else "N/A",
-            time=time_str
+            time=time_str,
+            schedule_status=schedule_status,
+            schedule_color="#2ecc71" if config.get('schedule_enabled') else "#95a5a6",
+            schedule_cards=schedule_cards
         )
         return html
