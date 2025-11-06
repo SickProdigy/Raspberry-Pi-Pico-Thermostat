@@ -118,8 +118,9 @@ class TempWebServer:
                 except:
                     pass
                 
-                return self._get_status_page(sensors, ac_monitor, heater_monitor, show_success=True)
-
+                # Redirect back to homepage
+                return 'HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n'
+            
             elif mode_action == 'temporary_hold':
                 # Enter temporary hold (pause schedules temporarily)
                 config['schedule_enabled'] = False
@@ -137,7 +138,8 @@ class TempWebServer:
                 except:
                     pass
                 
-                return self._get_status_page(sensors, ac_monitor, heater_monitor, show_success=True)
+                # Redirect back to homepage
+                return 'HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n'
             
             elif mode_action == 'permanent_hold':
                 # Enter permanent hold (disable schedules permanently)
@@ -156,7 +158,8 @@ class TempWebServer:
                 except:
                     pass
                 
-                return self._get_status_page(sensors, ac_monitor, heater_monitor, show_success=True)
+                # Redirect back to homepage
+                return 'HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n'
             # ===== END: Handle mode actions =====
             
             elif mode_action == 'save_schedules':
