@@ -47,6 +47,24 @@ class TempWebServer:
         except Exception as e:
             print(f"Web server error: {e}")
     
+    def _save_config_to_file(self, ac_monitor, heater_monitor):
+        """Save current settings to config.json file."""
+        try:
+            import json
+            config = {
+                'ac_target': ac_monitor.target_temp,
+                'ac_swing': ac_monitor.temp_swing,
+                'heater_target': heater_monitor.target_temp,
+                'heater_swing': heater_monitor.temp_swing
+            }
+            with open('config.json', 'w') as f:
+                json.dump(config, f)
+            print("Settings saved to config.json")
+            return True
+        except Exception as e:
+            print("Error saving config: {}".format(e))
+            return False
+    
     def _handle_update(self, request, sensors, ac_monitor, heater_monitor):
         """Handle form submission and update settings."""
         try:
@@ -62,11 +80,11 @@ class TempWebServer:
             # Update AC settings
             if 'ac_target' in params and ac_monitor:
                 ac_monitor.target_temp = params['ac_target']
-                print(f"AC target updated to {params['ac_target']}°F")
+                print("AC target updated to {}°F".format(params['ac_target']))
             
             if 'ac_swing' in params and ac_monitor:
                 ac_monitor.temp_swing = params['ac_swing']
-                print(f"AC swing updated to {params['ac_swing']}°F")
+                print("AC swing updated to {}°F".format(params['ac_swing']))
             
             # Update heater settings
             if 'heater_target' in params and heater_monitor:
@@ -76,6 +94,10 @@ class TempWebServer:
             if 'heater_swing' in params and heater_monitor:
                 heater_monitor.temp_swing = params['heater_swing']
                 print("Heater swing updated to {}°F".format(params['heater_swing']))
+            
+            # Save settings to file
+            if self._save_config_to_file(ac_monitor, heater_monitor):
+                print("Settings persisted to disk")
             
             # Send Discord notification
             from scripts.discord_webhook import send_discord_message
