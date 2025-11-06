@@ -146,10 +146,6 @@ class TemperatureMonitor(Monitor):
     def _log_temperature(self, temp):
         """Log temperature to CSV file."""
         try:
-            # Get sensor ID
-            sensor_ids = self.sensor.get_sensor_ids()
-            sensor_id = sensor_ids[0] if sensor_ids else "unknown"
-            
             # Get timestamp
             t = time.localtime()
             timestamp = "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}".format(
@@ -158,8 +154,8 @@ class TemperatureMonitor(Monitor):
             
             # Append to log file
             with open(self.log_file, 'a') as f:
-                f.write("{},{},{},{:.2f}\n".format(
-                    timestamp, self.label, sensor_id, temp
+                f.write("{},{},{:.2f}\n".format(
+                    timestamp, self.label, temp
                 ))
         except Exception as e:
             print("Error logging temperature: {}".format(e))

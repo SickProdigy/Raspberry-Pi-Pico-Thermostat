@@ -47,6 +47,7 @@ class ScheduleMonitor:
     def _find_active_schedule(self):
         """Find which schedule should be active right now."""
         if not self.config.get('schedule_enabled', False):
+            # Schedule is disabled (HOLD mode)
             return None
         
         schedules = self.config.get('schedules', [])
