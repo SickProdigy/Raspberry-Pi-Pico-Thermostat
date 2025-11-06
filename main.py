@@ -27,7 +27,7 @@ from scripts.air_conditioning import ACController
 from scripts.heating import HeaterController
 from scripts.web_server import TempWebServer
 from scripts.scheduler import ScheduleMonitor  # NEW: Import scheduler for time-based temp changes
-from scripts.memory_check import MemoryMonitor, check_memory_once  # NEW: Import memory checker
+from scripts.memory_check import check_memory_once  # Just the function
 
 # ===== START: Configuration Loading =====
 # Load saved settings from config.json file on Pico
@@ -249,9 +249,6 @@ monitors = [
     
     # Schedule monitor: Changes temp targets based on time of day
     schedule_monitor,
-
-    # Memory monitor: Checks RAM usage every 5 minutes
-    MemoryMonitor(interval=300),  # 300 seconds = 5 minutes
     
     # AC monitor: Automatically turns AC on/off based on temperature
     ac_monitor,
