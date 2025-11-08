@@ -55,6 +55,8 @@ class TemperatureMonitor(Monitor):
         self.last_report = 0
         self.alert_sent = False
         self.alert_start_time = None  # Track when alert started
+        self.last_temp = None    # Cached Last temperature reading
+        self.last_read_time = 0     # Timestamp of last reading
     
     def should_run(self):
         """Check if it's time to run this monitor."""
@@ -74,6 +76,10 @@ class TemperatureMonitor(Monitor):
             return
         
         temp = list(temps.values())[0]  # Get first temp reading
+        
+        # Cache the reading for web server (avoid blocking reads)
+        self.last_temp = temp
+        self.last_read_time = current_time
         
         # Check for alerts
         alert_condition = False
