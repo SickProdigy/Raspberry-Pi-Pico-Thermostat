@@ -56,10 +56,10 @@ class TempWebServer:
                 return
 
             else:
-                response = self._get_status_page(sensors, ac_monitor, heater_monitor)
+                response = self._get_status_page(sensors, ac_monitor, heater_monitor, schedule_monitor)
 
             if response is None:
-                response = self._get_status_page(sensors, ac_monitor, heater_monitor)
+                response = self._get_status_page(sensors, ac_monitor, heater_monitor, schedule_monitor)
 
             conn.send('HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n')
             conn.sendall(response.encode('utf-8'))
@@ -387,9 +387,9 @@ class TempWebServer:
             import sys
             sys.print_exception(e)
         
-        return self._get_status_page(sensors, ac_monitor, heater_monitor, show_success=True)
+        return self._get_status_page(sensors, ac_monitor, heater_monitor, schedule_monitor, show_success=True)
 
-    def _get_status_page(self, sensors, ac_monitor, heater_monitor, show_success=False):
+    def _get_status_page(self, sensors, ac_monitor, heater_monitor, schedule_monitor=None, show_success=False):
         """Generate HTML status page."""
         print("DEBUG: Generating status page...")
         try:
@@ -487,21 +487,61 @@ class TempWebServer:
             inside_temp_str = "{:.1f}".format(inside_temp) if isinstance(inside_temp, float) else str(inside_temp)
             outside_temp_str = "{:.1f}".format(outside_temp) if isinstance(outside_temp, float) else str(outside_temp)
             
-            # ===== START: Add HOLD mode banner =====
+            # ===== START: Add HOLD mode banner with countdown timer =====
             hold_banner = ""
+            
+            # Calculate remaining time for temporary hold
+            temp_hold_remaining = ""
+            if not config.get('schedule_enabled', False) and not config.get('permanent_hold', False):
+                # In temporary hold - check if we have schedule_monitor with timer
+                if schedule_monitor and hasattr(schedule_monitor, 'temp_hold_start_time'):
+                    if schedule_monitor.temp_hold_start_time is not None:
+                        # Calculate elapsed time
+                        elapsed = time.time() - schedule_monitor.temp_hold_start_time
+                        # Calculate remaining time
+                        remaining = schedule_monitor.temp_hold_duration - elapsed
+                        
+                        if remaining > 0:
+                            # Convert to minutes
+                            mins_remaining = int(remaining // 60)
+                            
+                            # Format the display text
+                            if mins_remaining > 60:
+                                # Show hours and minutes for long durations
+                                hours = mins_remaining // 60
+                                mins = mins_remaining % 60
+                                temp_hold_remaining = " - {}h {}m remaining".format(hours, mins)
+                            elif mins_remaining > 1:
+                                # Show just minutes
+                                temp_hold_remaining = " - {} min remaining".format(mins_remaining)
+                            elif mins_remaining == 1:
+                                # Show singular "minute"
+                                temp_hold_remaining = " - 1 minute remaining"
+                            else:
+                                # Less than 1 minute left
+                                secs_remaining = int(remaining)
+                                temp_hold_remaining = " - {}s remaining".format(secs_remaining)
+                        else:
+                            # Timer expired (should auto-resume soon)
+                            temp_hold_remaining = " - Resuming..."
+            
             if config.get('permanent_hold', False):
+                # PERMANENT HOLD - No timer, stays until user resumes or reboot
                 hold_banner = """
                 <div style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); animation: fadeIn 0.5s;">
                     🛑 PERMANENT HOLD - Schedules disabled (Manual control only)
                 </div>
                 """
             elif not config.get('schedule_enabled', False) and has_schedules:
+                # TEMPORARY HOLD - Show countdown timer if available
+                # Note: We'll need to accept schedule_monitor as parameter to access timer
                 hold_banner = """
                 <div style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white; padding: 15px; border-radius: 10px; text-align: center; font-weight: bold; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); animation: fadeIn 0.5s;">
-                    ⏸️ TEMPORARY HOLD - Manual override active (Schedule paused)
+                    ⏸️ TEMPORARY HOLD - Manual override active{remaining}
                 </div>
-                """
-            # ===== END: Add HOLD mode banner =====
+                """.format(remaining=temp_hold_remaining)
+            # ===== END: Add HOLD mode banner with countdown timer =====
+            # Final HTML assembly
             html = """
 <!DOCTYPE html>
 <html>
