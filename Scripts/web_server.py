@@ -332,36 +332,44 @@ class TempWebServer:
                 print("Heater swing updated to {}°F".format(params['heater_swing']))
             # ===== END: Update Heater Settings =====
             
-            # ===== START: Disable scheduling and enter HOLD mode =====
-            if config.get('schedule_enabled'):
+            # ===== START: Disable scheduling ONLY if user manually changed temps =====
+            # Check if this is a user-initiated change (from web form)
+            # If AC or heater targets were changed, it's a manual override
+            user_changed_temps = (
+                ('ac_target' in params and params['ac_target'] != config.get('ac_target')) or
+                ('heater_target' in params and params['heater_target'] != config.get('heater_target'))
+            )
+            
+            if user_changed_temps and config.get('schedule_enabled'):
                 config['schedule_enabled'] = False
-                config['permanent_hold'] = False  # ✅ ADD THIS - ensure it's temporary
-                print("⏸️ Schedule disabled - entering TEMPORARY HOLD mode")
+                config['permanent_hold'] = False  # Temporary hold
+                print("⏸️ Schedule disabled - entering TEMPORARY HOLD mode (user override)")
                 
                 # Reload schedule monitor to disable it
                 if schedule_monitor:
                     schedule_monitor.reload_config(config)
-            # ===== END: Disable scheduling and enter HOLD mode =====
+            # ===== END: Disable scheduling ONLY if user manually changed temps =====
             
             # ===== START: Save settings to file =====
             if self._save_config_to_file(config):
                 print("Settings persisted to disk")
             # ===== END: Save settings to file =====
             
-            # ===== START: Send Discord notification =====
-            try:
-                from scripts.discord_webhook import send_discord_message
-                ac_target_str = str(params.get('ac_target', 'N/A'))
-                ac_swing_str = str(params.get('ac_swing', 'N/A'))
-                heater_target_str = str(params.get('heater_target', 'N/A'))
-                heater_swing_str = str(params.get('heater_swing', 'N/A'))
-                
-                message = "⏸️ HOLD Mode - Manual override: AC: {}F +/- {}F | Heater: {}F +/- {}F (Schedule disabled)".format(
-                    ac_target_str, ac_swing_str, heater_target_str, heater_swing_str
-                )
-                send_discord_message(message)
-            except Exception as discord_error:
-                print("Discord notification failed: {}".format(discord_error))
+            # ===== START: Send Discord notification ONLY if user changed =====
+            if user_changed_temps:
+                try:
+                    from scripts.discord_webhook import send_discord_message
+                    ac_target_str = str(params.get('ac_target', 'N/A'))
+                    ac_swing_str = str(params.get('ac_swing', 'N/A'))
+                    heater_target_str = str(params.get('heater_target', 'N/A'))
+                    heater_swing_str = str(params.get('heater_swing', 'N/A'))
+                    
+                    message = "⏸️ HOLD Mode - Manual override: AC: {}F +/- {}F | Heater: {}F +/- {}F (Schedule disabled)".format(
+                        ac_target_str, ac_swing_str, heater_target_str, heater_swing_str
+                    )
+                    send_discord_message(message)
+                except Exception as discord_error:
+                    print("Discord notification failed: {}".format(discord_error))
             # ===== END: Send Discord notification =====
             
             # ===== START: Debug output =====
