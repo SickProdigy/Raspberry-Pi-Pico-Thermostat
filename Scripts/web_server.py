@@ -194,34 +194,40 @@ class TempWebServer:
             # ===== END: Handle mode actions =====
             
             # ===== START: Handle schedule configuration save =====
-            # Parse schedules from form
+            # Parse schedules (4 slots)
             schedules = []
             for i in range(4):
-                time_key = 'schedule_{}_time'.format(i)
-                name_key = 'schedule_{}_name'.format(i)
-                ac_key = 'schedule_{}_ac'.format(i)
-                heater_key = 'schedule_{}_heater'.format(i)
+                time_key = 'schedule{}_time'.format(i)
+                name_key = 'schedule{}_name'.format(i)
+                ac_key = 'schedule{}_ac'.format(i)
+                heater_key = 'schedule{}_heater'.format(i)
                 
                 if time_key in params and params[time_key]:
-                    # Validate time format (HH:MM)
-                    time_val = params[time_key]
-                    if ':' not in time_val or len(time_val.split(':')) != 2:
-                        print("Invalid time format: {}".format(time_val))
+                    # URL decode the time (converts %3A back to :)
+                    schedule_time = params[time_key].replace('%3A', ':')
+                    
+                    # Validate time format
+                    if ':' not in schedule_time or len(schedule_time.split(':')) != 2:
+                        print("Invalid time format: {}".format(schedule_time))
                         return 'HTTP/1.1 303 See Other\r\nLocation: /schedule\r\n\r\n'
                     
                     try:
-                        hours, mins = time_val.split(':')
+                        hours, mins = schedule_time.split(':')
                         if not (0 <= int(hours) <= 23 and 0 <= int(mins) <= 59):
                             raise ValueError
                     except:
-                        print("Invalid time value: {}".format(time_val))
+                        print("Invalid time value: {}".format(schedule_time))
                         return 'HTTP/1.1 303 See Other\r\nLocation: /schedule\r\n\r\n'
                     
+                    # URL decode the name too
+                    schedule_name = params.get(name_key, 'Schedule {}'.format(i+1)).replace('+', ' ')
+                    
+                    # Create schedule entry
                     schedule = {
-                        'time': params[time_key],
-                        'name': params.get(name_key, 'Schedule {}'.format(i+1)),
-                        'ac_target': float(params.get(ac_key, 77.0)),
-                        'heater_target': float(params.get(heater_key, 80.0))
+                        'time': schedule_time,
+                        'name': schedule_name,
+                        'ac_target': float(params.get(ac_key, 75.0)),
+                        'heater_target': float(params.get(heater_key, 72.0))
                     }
                     schedules.append(schedule)
             
@@ -264,8 +270,8 @@ class TempWebServer:
                 pass
             # ===== END: Handle schedule configuration save =====
             
-            # Redirect back to schedule page
-            return 'HTTP/1.1 303 See Other\r\nLocation: /schedule\r\n\r\n'
+            # Redirect back to Dashboard
+            return 'HTTP/1.1 303 See Other\r\nLocation: /\r\n\r\n'
             
         except Exception as e:
             print("Error updating schedule: {}".format(e))
