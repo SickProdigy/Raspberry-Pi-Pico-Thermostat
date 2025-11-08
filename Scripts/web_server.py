@@ -1163,8 +1163,8 @@ class TempWebServer:
                     <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">✅ Automatic Mode</div>
                     <div style="font-size: 14px; margin-bottom: 15px;">Temperatures adjust based on schedule</div>
                     <div style="display: flex; gap: 10px; justify-content: center;">
-                        <button type="submit" name="mode_action" value="temporary_hold" style="padding: 10px 20px; background: #f39c12; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">⏸️ Pause</button>
-                        <button type="submit" name="mode_action" value="permanent_hold" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🛑 Disable</button>
+                        <button type="submit" name="mode_action" value="temporary_hold" style="padding: 10px 20px; background: #f39c12; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">⏸️ Temp Hold</button>
+                        <button type="submit" name="mode_action" value="permanent_hold" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🛑 Perm Hold</button>
                     </div>
                 </div>
             </form>
@@ -1175,7 +1175,9 @@ class TempWebServer:
                 <div style="background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
                     <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">🛑 Permanent Hold</div>
                     <div style="font-size: 14px; margin-bottom: 15px;">Manual control only - Schedules disabled</div>
-                    <button type="submit" name="mode_action" value="resume" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶️ Enable Schedules</button>
+                    <div style="text-align: center;">
+                        <button type="submit" name="mode_action" value="resume" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶️ Enable Schedules</button>
+                    </div>
                 </div>
             </form>
             """
@@ -1187,7 +1189,7 @@ class TempWebServer:
                     <div style="font-size: 14px; margin-bottom: 15px;">Manual override active</div>
                     <div style="display: flex; gap: 10px; justify-content: center;">
                         <button type="submit" name="mode_action" value="resume" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶️ Resume</button>
-                        <button type="submit" name="mode_action" value="permanent_hold" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🛑 Disable</button>
+                        <button type="submit" name="mode_action" value="permanent_hold" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🛑 Perm Hold</button>
                     </div>
                 </div>
             </form>
