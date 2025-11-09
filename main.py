@@ -376,20 +376,8 @@ while True:
         # Web requests
         web_server.check_requests(sensors, ac_monitor, heater_monitor, schedule_monitor, config)
 
-        # ===== RETRY NTP SYNC (if initial failed) =====
-        if not ntp_synced and retry_ntp_attempts < max_ntp_attempts:
-            if time.time() % 10 < 1:  # Every 10 seconds
-                if sync_ntp_time(TIMEZONE_OFFSET):
-                    ntp_synced = True
-                    last_ntp_sync = time.time()
-                    print("NTP sync succeeded on retry #{} (UTC{:+d})".format(retry_ntp_attempts + 1, TIMEZONE_OFFSET))
-                else:
-                    retry_ntp_attempts += 1
-                    print("NTP retry {} failed".format(retry_ntp_attempts))
-        
         # ===== PERIODIC RE-SYNC (every 24 hours) =====
-        # Re-sync once a day to correct clock drift
-        if ntp_synced and (time.time() - last_ntp_sync) > 86400:  # 24 hours in seconds
+        if ntp_synced and (time.time() - last_ntp_sync) > 86400:
             print("24-hour re-sync due...")
             if sync_ntp_time(TIMEZONE_OFFSET):
                 last_ntp_sync = time.time()
@@ -397,8 +385,15 @@ while True:
             else:
                 print("Daily NTP re-sync failed (will retry tomorrow)")
         # ===== END: PERIODIC RE-SYNC =====
-        # Enable garbage collection to free memory
-        gc.collect()
+        
+        # ===== ADD THIS: AGGRESSIVE GARBAGE COLLECTION =====
+        current_time = time.time()
+        if int(current_time) % 5 == 0:  # Every 5 seconds
+            gc.collect()
+            # Optional: Print memory stats occasionally
+            if int(current_time) % 60 == 0:  # Every minute
+                print("💾 Memory free: {} KB".format(gc.mem_free() // 1024))
+        # ===== END: AGGRESSIVE GC =====
         time.sleep(0.1)
         
     except KeyboardInterrupt:

@@ -32,5 +32,6 @@
         }
     ],
     "schedule_enabled": true,
-    "permanent_hold": false
+    "permanent_hold": false,
+    "temp_hold_start_time": null
 }

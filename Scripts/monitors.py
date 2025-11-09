@@ -77,6 +77,12 @@ class TemperatureMonitor(Monitor):
         
         temp = list(temps.values())[0]  # Get first temp reading
         
+        # ===== ADD THIS: Validate temperature is reasonable =====
+        if temp < -50 or temp > 150:  # Sanity check (outside normal range)
+            print("⚠️ Warning: {} sensor returned invalid temp: {:.1f}°F".format(self.label, temp))
+            return  # Don't cache invalid reading
+        # ===== END: Validation =====
+        
         # Cache the reading for web server (avoid blocking reads)
         self.last_temp = temp
         self.last_read_time = current_time
