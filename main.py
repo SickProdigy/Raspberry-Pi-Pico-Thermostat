@@ -297,6 +297,24 @@ schedule_monitor = ScheduleMonitor(
     config=config,                  # Pass config with schedules
     interval=60                     # Check schedule every 60 seconds
 )
+
+# ===== APPLY ACTIVE SCHEDULE IMMEDIATELY ON STARTUP =====
+if config.get('schedule_enabled', False):
+    try:
+        # Find and apply the current active schedule
+        active_schedule = schedule_monitor._find_active_schedule()
+        if active_schedule:
+            schedule_monitor._apply_schedule(active_schedule)
+            print("✅ Active schedule applied on startup: {}".format(
+                active_schedule.get('name', 'Unnamed')
+            ))
+        else:
+            print("ℹ️ No active schedule found (using manual targets)")
+    except Exception as e:
+        print("⚠️ Warning: Could not apply startup schedule: {}".format(e))
+else:
+    print("ℹ️ Schedules disabled - using manual targets")
+# ===== END: APPLY ACTIVE SCHEDULE ON STARTUP =====
 # ===== END: Schedule Monitor Setup =====
 
 # ===== START: Print Current Settings =====

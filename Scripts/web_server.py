@@ -270,10 +270,18 @@ class TempWebServer:
                 
                 if self._save_config_to_file(config):
                     print("▶️ Schedule resumed - Automatic mode")
-                    
+            
                     if schedule_monitor:
                         schedule_monitor.reload_config(config)
+                        # ===== IMMEDIATELY APPLY ACTIVE SCHEDULE =====
+                        active_schedule = schedule_monitor._find_active_schedule()
+                        if active_schedule:
+                            schedule_monitor._apply_schedule(active_schedule)
+                            print("✅ Active schedule applied immediately after resume: {}".format(
+                                active_schedule.get('name', 'Unnamed')
+                            ))
                 
+                # Send Discord notification
                 try:
                     from scripts.discord_webhook import send_discord_message
                     send_discord_message("▶️ Schedule resumed - Automatic temperature control active")
