@@ -84,27 +84,39 @@ class ScheduleMonitor:
         """Apply a schedule's settings to the monitors."""
         if not schedule:
             return
-        
-        # Check if this is a different schedule than last applied
+
         schedule_id = schedule.get('time', '') + schedule.get('name', '')
         if schedule_id == self.last_applied_schedule:
             return  # Already applied
-        
+
         try:
             # Update AC settings if provided
             if 'ac_target' in schedule:
                 self.ac_monitor.target_temp = float(schedule['ac_target'])
-            
+                self.config['ac_target'] = float(schedule['ac_target'])  # <-- ADD THIS
+
             if 'ac_swing' in schedule:
                 self.ac_monitor.temp_swing = float(schedule['ac_swing'])
-            
+                self.config['ac_swing'] = float(schedule['ac_swing'])    # <-- ADD THIS
+
             # Update heater settings if provided
             if 'heater_target' in schedule:
                 self.heater_monitor.target_temp = float(schedule['heater_target'])
-            
+                self.config['heater_target'] = float(schedule['heater_target'])  # <-- ADD THIS
+
             if 'heater_swing' in schedule:
                 self.heater_monitor.temp_swing = float(schedule['heater_swing'])
-            
+                self.config['heater_swing'] = float(schedule['heater_swing'])    # <-- ADD THIS
+
+            # Save updated config to file so targets persist
+            try:
+                import json
+                with open('config.json', 'w') as f:
+                    json.dump(self.config, f)
+                print("✅ Config updated with active schedule targets")
+            except Exception as e:
+                print("⚠️ Could not save config: {}".format(e))
+
             # Log the change
             schedule_name = schedule.get('name', 'Unnamed')
             print("\n" + "="*50)
