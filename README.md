@@ -2,9 +2,14 @@
 
 > Automated climate control system using Raspberry Pi Pico W with web interface and scheduling
 
-## Overview
+## Recent Updates
 
-This project provides automated climate monitoring and control using a Raspberry Pi Pico W. Features dual-zone temperature monitoring, AC/heater control, time-based scheduling, and a web interface for easy management.
+- 🆕 **Immediate schedule application:** When resuming scheduling from hold mode, the system now instantly applies the current schedule targets (no delay).
+- 🆕 **Aggressive memory management:** Garbage collection runs every 5 seconds for improved reliability.
+- 🆕 **Manual hold settings:** `ac_target` and `heater_target` in `config.json` now only store your last manual hold settings, not schedule targets.
+- 🆕 **NTP sync optimization:** NTP modules are loaded only when needed, saving RAM.
+- 🆕 **Temperature validation:** Impossible sensor readings are ignored for safety.
+- 🆕 **Improved config persistence:** All changes are saved and reloaded immediately.
 
 ## Features
 
@@ -17,6 +22,7 @@ This project provides automated climate monitoring and control using a Raspberry
   - ✅ Configurable alert thresholds
   - ✅ Exception recovery (system won't crash permanently)
   - ✅ Graceful shutdown with Ctrl+C
+  - ✅ **Aggressive garbage collection for stability**
 
 - **Climate Control**
   - ✅ Automated AC control with temperature swing logic
@@ -24,6 +30,7 @@ This project provides automated climate monitoring and control using a Raspberry
   - ✅ Short-cycle protection for both AC and heater
   - ✅ Dual relay control via opto-coupler for 110V AC
   - ✅ Mutual exclusion (AC and heater never run simultaneously)
+  - ✅ **Manual hold settings are preserved and not overwritten by schedules**
 
 - **Scheduling System**
   - ✅ 4 configurable time-based schedules per day
@@ -33,6 +40,7 @@ This project provides automated climate monitoring and control using a Raspberry
   - ✅ Permanent hold mode (manual control until restart)
   - ✅ Schedule configuration persists through reboots
   - ✅ Hold modes reset to Automatic on restart (safety feature)
+  - ✅ **Immediate schedule application after resuming from hold**
 
 - **Web Interface**
   - ✅ Real-time temperature display
@@ -43,11 +51,23 @@ This project provides automated climate monitoring and control using a Raspberry
   - ✅ Countdown timer for temporary holds
   - ✅ Mobile-responsive design
   - ✅ Auto-refresh dashboard (30 seconds)
+  - ✅ **Settings and schedule changes are reflected instantly**
 
-- **Planned Features**
-  - 🚧 Humidity monitoring (DHT22/SHT31)
-  - 🚧 Soil moisture monitoring
-  - 🚧 Additional relay control for fans, grow lights
+## Configuration Notes
+
+- **AC/Heater target settings:**  
+  - `ac_target` and `heater_target` in `config.json` are updated whenever you use Temp Hold, Perm Hold, or when a schedule is applied.
+  - When schedules are active, these values are updated to match the current schedule’s targets.
+  - This ensures the config file always reflects the current operating temperatures, whether in hold mode or schedule mode.
+
+- **Immediate schedule application:**  
+  - When you click "Resume Scheduling," the system applies the current schedule targets instantly, so the dashboard updates without delay.
+
+- **Memory management:**  
+  - Garbage collection runs every 5 seconds to prevent memory fragmentation and crashes.
+
+- **Sensor validation:**  
+  - Temperatures outside the range -50°F to 150°F are ignored to prevent false readings.
 
 ## Quick Start
 
