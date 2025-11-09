@@ -4,9 +4,6 @@ import network # type: ignore
 import json
 import gc  # type: ignore # ADD THIS - for garbage collection
 import sys
-import socket  # type: ignore
-import struct  # type: ignore
-import ntptime  # type: ignore
 
 # Initialize pins (LED light onboard)
 led = Pin("LED", Pin.OUT)
@@ -32,6 +29,53 @@ from scripts.heating import HeaterController
 from scripts.web_server import TempWebServer
 from scripts.scheduler import ScheduleMonitor  # NEW: Import scheduler for time-based temp changes
 from scripts.memory_check import check_memory_once  # Just the function
+
+# ===== NEW: NTP Sync Function (imports locally) =====
+def sync_ntp_time(timezone_offset):
+    """
+    Sync time with NTP server (imports modules locally to save RAM).
+    Returns True if successful, False otherwise.
+    """
+    try:
+        # Import ONLY when needed (freed by GC after function ends)
+        import socket  # type: ignore
+        import struct  # type: ignore
+        
+        NTP_DELTA = 2208988800
+        host = "pool.ntp.org"
+        NTP_QUERY = bytearray(48)
+        NTP_QUERY[0] = 0x1B
+        
+        # Create socket with timeout
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(3.0)  # 3-second timeout
+        
+        try:
+            addr = socket.getaddrinfo(host, 123)[0][-1]
+            s.sendto(NTP_QUERY, addr)
+            msg = s.recv(48)
+            val = struct.unpack("!I", msg[40:44])[0]
+            utc_timestamp = val - NTP_DELTA
+            
+            # Apply timezone offset
+            local_timestamp = utc_timestamp + (timezone_offset * 3600)
+            
+            # Set RTC with local time
+            tm = time.gmtime(local_timestamp)
+            RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
+            
+            return True
+            
+        finally:
+            s.close()
+            
+    except Exception as e:
+        print("NTP sync failed: {}".format(e))
+        return False
+    finally:
+        # Force garbage collection to free socket/struct modules
+        gc.collect()
+# ===== END: NTP Sync Function =====
 
 # ===== START: Configuration Loading =====
 # Load saved settings from config.json file on Pico
@@ -161,46 +205,17 @@ if wifi and wifi.isconnected():
     web_server = TempWebServer(port=80)
     web_server.start()
 
-    # Attempt time sync with timeout (MicroPython compatible)
+    # ===== INITIAL NTP SYNC (using function) =====
     ntp_synced = False
-    try:  
-        def time_with_timeout():
-            """NTP time fetch with 3-second timeout."""
-            NTP_DELTA = 2208988800
-            host = "pool.ntp.org"
-            NTP_QUERY = bytearray(48)
-            NTP_QUERY[0] = 0x1B
-            
-            # Create socket with timeout
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.settimeout(3.0)  # 3-second timeout
-            
-            try:
-                addr = socket.getaddrinfo(host, 123)[0][-1]
-                s.sendto(NTP_QUERY, addr)
-                msg = s.recv(48)
-                s.close()
-                val = struct.unpack("!I", msg[40:44])[0]
-                return val - NTP_DELTA
-            finally:
-                s.close()
-        
-        # Get UTC time from NTP
-        utc_timestamp = time_with_timeout()
-        
-        # Apply timezone offset
-        local_timestamp = utc_timestamp + (TIMEZONE_OFFSET * 3600)
-        
-        # Set RTC with local time
-        tm = time.gmtime(local_timestamp)
-        RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
-        
-        ntp_synced = True
-        print("Time synced with NTP server (UTC{:+d})".format(TIMEZONE_OFFSET))
-        
+    try:
+        ntp_synced = sync_ntp_time(TIMEZONE_OFFSET)
+        if ntp_synced:
+            print("Time synced with NTP server (UTC{:+d})".format(TIMEZONE_OFFSET))
+        else:
+            print("Initial NTP sync failed, will retry in background...")
     except Exception as e:
-        print("Initial NTP sync failed: {}".format(e))
-        print("Will retry in background...")
+        print("Initial NTP sync error: {}".format(e))
+    # ===== END: INITIAL NTP SYNC =====
     
 else:
     # WiFi connection failed
@@ -349,6 +364,7 @@ print("Press Ctrl+C to stop\n")
 # Add NTP retry flags (before main loop)
 retry_ntp_attempts = 0
 max_ntp_attempts = 5  # Try up to 5 times after initial failure
+last_ntp_sync = time.time()  # Track when we last synced
 
 # ===== START: Main Loop =====
 # Main monitoring loop (runs forever until Ctrl+C)
@@ -360,46 +376,27 @@ while True:
         # Web requests
         web_server.check_requests(sensors, ac_monitor, heater_monitor, schedule_monitor, config)
 
-        # Retry NTP sync every ~10s if not yet synced
+        # ===== RETRY NTP SYNC (if initial failed) =====
         if not ntp_synced and retry_ntp_attempts < max_ntp_attempts:
-            if retry_ntp_attempts == 0 or (time.time() % 10) < 1:
-                try:
-                    import ntptime  # type: ignore
-                    import socket
-                    import struct
-                    
-                    # Quick NTP sync with timeout
-                    NTP_DELTA = 2208988800
-                    host = "pool.ntp.org"
-                    NTP_QUERY = bytearray(48)
-                    NTP_QUERY[0] = 0x1B
-                    
-                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    s.settimeout(3.0)  # 3-second timeout
-                    
-                    try:
-                        addr = socket.getaddrinfo(host, 123)[0][-1]
-                        s.sendto(NTP_QUERY, addr)
-                        msg = s.recv(48)
-                        val = struct.unpack("!I", msg[40:44])[0]
-                        utc_timestamp = val - NTP_DELTA
-                        
-                        # Apply timezone offset
-                        local_timestamp = utc_timestamp + (TIMEZONE_OFFSET * 3600)
-                        
-                        # Set RTC with local time
-                        tm = time.gmtime(local_timestamp)
-                        RTC().datetime((tm[0], tm[1], tm[2], tm[6] + 1, tm[3], tm[4], tm[5], 0))
-                        
-                        ntp_synced = True
-                        print("NTP sync succeeded on retry #{} (UTC{:+d})".format(retry_ntp_attempts + 1, TIMEZONE_OFFSET))
-                    finally:
-                        s.close()
-                        
-                except Exception as e:
+            if time.time() % 10 < 1:  # Every 10 seconds
+                if sync_ntp_time(TIMEZONE_OFFSET):
+                    ntp_synced = True
+                    last_ntp_sync = time.time()
+                    print("NTP sync succeeded on retry #{} (UTC{:+d})".format(retry_ntp_attempts + 1, TIMEZONE_OFFSET))
+                else:
                     retry_ntp_attempts += 1
-                    print("NTP retry {} failed: {}".format(retry_ntp_attempts, e))
-
+                    print("NTP retry {} failed".format(retry_ntp_attempts))
+        
+        # ===== PERIODIC RE-SYNC (every 24 hours) =====
+        # Re-sync once a day to correct clock drift
+        if ntp_synced and (time.time() - last_ntp_sync) > 86400:  # 24 hours in seconds
+            print("24-hour re-sync due...")
+            if sync_ntp_time(TIMEZONE_OFFSET):
+                last_ntp_sync = time.time()
+                print("Daily NTP re-sync successful")
+            else:
+                print("Daily NTP re-sync failed (will retry tomorrow)")
+        # ===== END: PERIODIC RE-SYNC =====
         # Enable garbage collection to free memory
         gc.collect()
         time.sleep(0.1)
@@ -424,6 +421,5 @@ while True:
         print("❌ Main loop error: {}".format(e))
         import sys
         sys.print_exception(e)
-        print("⚠️ Pausing 5 seconds before retrying...")
         time.sleep(5)  # Brief pause before retrying
 # ===== END: Main Loop =====

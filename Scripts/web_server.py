@@ -636,6 +636,13 @@ class TempWebServer:
     def _get_status_page(self, sensors, ac_monitor, heater_monitor, schedule_monitor=None, show_success=False):
         """Generate HTML status page."""
         print("DEBUG: Generating status page...")
+        
+        # ===== FORCE GARBAGE COLLECTION BEFORE BIG ALLOCATION =====
+        import gc
+        gc.collect()
+        print("DEBUG: Memory freed, {} bytes available".format(gc.mem_free()))
+        # ===== END GARBAGE COLLECTION =====
+        
         try:
             # Get current temperatures (use cached values to avoid blocking)
             inside_temp = getattr(sensors.get('inside'), 'last_temp', None)
@@ -1453,18 +1460,45 @@ class TempWebServer:
         
         # Build mode buttons based on current state
         if config.get('schedule_enabled'):
+            # ===== NEW: Find active schedule =====
+            active_schedule_name = "None"
+            current_time = time.localtime()
+            current_minutes = current_time[3] * 60 + current_time[4]
+            
+            # Sort schedules by time and find the active one
+            sorted_schedules = []
+            for schedule in schedules:
+                if schedule.get('time'):
+                    try:
+                        time_parts = schedule['time'].split(':')
+                        schedule_minutes = int(time_parts[0]) * 60 + int(time_parts[1])
+                        sorted_schedules.append((schedule_minutes, schedule))
+                    except:
+                        pass
+            
+            sorted_schedules.sort()
+            
+            # Find most recent schedule that has passed
+            for schedule_minutes, schedule in sorted_schedules:
+                if current_minutes >= schedule_minutes:
+                    active_schedule_name = schedule.get('name', 'Unnamed')
+                else:
+                    break
+            
+            # If no schedule found (before first one), use last from yesterday
+            if active_schedule_name == "None" and sorted_schedules:
+                active_schedule_name = sorted_schedules[-1][1].get('name', 'Unnamed')
+            # ===== END: Find active schedule =====
+            
             return """
             <form method="POST" action="/schedule" style="margin: 20px 0;">
                 <div style="background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
-                    <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">✅ Automatic Mode</div>
-                    <div style="font-size: 14px; margin-bottom: 15px;">Temperatures adjust based on schedule</div>
-                    <div style="display: flex; gap: 10px; justify-content: center;">
-                        <button type="submit" name="mode_action" value="temporary_hold" style="padding: 10px 20px; background: #f39c12; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">⏸️ Temp Hold</button>
-                        <button type="submit" name="mode_action" value="permanent_hold" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🛑 Perm Hold</button>
-                    </div>
+                    <div style="font-weight: bold; font-size: 18px; margin-bottom: 5px;">✅ Automatic Mode</div>
+                    <div style="font-size: 14px; opacity: 0.9; margin-bottom: 10px;">Currently running: <strong>{active_schedule}</strong></div>
+                    <div style="font-size: 13px; opacity: 0.8;">Temperatures adjust based on schedule</div>
                 </div>
             </form>
-            """
+            """.format(active_schedule=active_schedule_name)
         elif config.get('permanent_hold', False):
             return """
             <form method="POST" action="/schedule" style="margin: 20px 0;">
@@ -1472,7 +1506,7 @@ class TempWebServer:
                     <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">🛑 Permanent Hold</div>
                     <div style="font-size: 14px; margin-bottom: 15px;">Manual control only - Schedules disabled</div>
                     <div style="text-align: center;">
-                        <button type="submit" name="mode_action" value="resume" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶️ Enable Schedules</button>
+                        <button type="submit" name="mode_action" value="resume" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶️ Resume Scheduling</button>
                     </div>
                 </div>
             </form>
@@ -1483,9 +1517,8 @@ class TempWebServer:
                 <div style="background: linear-gradient(135deg, #f39c12, #e67e22); color: white; padding: 15px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);">
                     <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">⏸️ Temporary Hold</div>
                     <div style="font-size: 14px; margin-bottom: 15px;">Manual override active</div>
-                    <div style="display: flex; gap: 10px; justify-content: center;">
-                        <button type="submit" name="mode_action" value="resume" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶️ Resume</button>
-                        <button type="submit" name="mode_action" value="permanent_hold" style="padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">🛑 Perm Hold</button>
+                    <div style="text-align: center;">
+                        <button type="submit" name="mode_action" value="resume" style="padding: 10px 20px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">▶️ Resume Scheduling</button>
                     </div>
                 </div>
             </form>
