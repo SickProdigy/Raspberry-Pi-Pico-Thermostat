@@ -123,6 +123,33 @@ class TempWebServer:
                 print("DEBUG: Schedule editor page sent successfully ({} bytes total)".format(len(response_bytes)))
                 return
 
+            elif 'GET /settings' in request:
+                response = self._get_settings_page(sensors, ac_monitor, heater_monitor)
+                response_bytes = response.encode('utf-8')
+                
+                conn.send('HTTP/1.1 200 OK\r\n')
+                conn.send('Content-Type: text/html; charset=utf-8\r\n')
+                conn.send('Content-Length: {}\r\n'.format(len(response_bytes)))
+                conn.send('Connection: close\r\n')
+                conn.send('\r\n')
+                
+                chunk_size = 1024
+                for i in range(0, len(response_bytes), chunk_size):
+                    chunk = response_bytes[i:i+chunk_size]
+                    conn.send(chunk)
+                
+                conn.close()
+                print("DEBUG: Settings page sent successfully ({} bytes total)".format(len(response_bytes)))
+                return
+            
+            elif 'POST /settings' in request:
+                response = self._handle_settings_update(request, sensors, ac_monitor, heater_monitor, schedule_monitor, config)
+                if isinstance(response, str) and response.startswith('HTTP/1.1'):
+                    conn.sendall(response.encode('utf-8'))
+                    conn.close()
+                    print("DEBUG: Settings update redirect sent")
+                    return
+
             elif 'POST /schedule' in request:
                 response = self._handle_schedule_update(request, sensors, ac_monitor, heater_monitor, schedule_monitor, config)
                 # Redirects are already complete HTTP responses, send directly
@@ -505,19 +532,24 @@ class TempWebServer:
             for pair in body.split('&'):
                 if '=' in pair:
                     key, value = pair.split('=', 1)
-                    params[key] = float(value)
+                    # Don't convert hold_type to float
+                    if key == 'hold_type':
+                        params[key] = value
+                    else:
+                        params[key] = float(value)
+            
+            # Check which hold button was clicked
+            hold_type = params.get('hold_type', 'temp')  # Default to temp hold
+            is_permanent = (hold_type == 'perm')
             
             # ===== START: Validate Heat <= AC =====
-            # Get the values that will be set
             new_heater_target = params.get('heater_target', config.get('heater_target', 80.0))
             new_ac_target = params.get('ac_target', config.get('ac_target', 77.0))
             
-            # Validation: Heater must be <= AC
             if new_heater_target > new_ac_target:
                 print("❌ Validation failed: Heater target ({}) cannot be greater than AC target ({})".format(
                     new_heater_target, new_ac_target
                 ))
-                # Return error page
                 return self._get_error_page(
                     "Invalid Settings",
                     "Heater target ({:.1f}°F) cannot be greater than AC target ({:.1f}°F)".format(
@@ -529,39 +561,35 @@ class TempWebServer:
             
             # ===== START: Update AC Settings =====
             if 'ac_target' in params and ac_monitor:
-                ac_monitor.target_temp = params['ac_target']  # Update monitor
-                config['ac_target'] = params['ac_target']      # Update config
+                ac_monitor.target_temp = params['ac_target']
+                config['ac_target'] = params['ac_target']
                 print("AC target updated to {}°F".format(params['ac_target']))
-            
-            if 'ac_swing' in params and ac_monitor:
-                ac_monitor.temp_swing = params['ac_swing']    # Update monitor
-                config['ac_swing'] = params['ac_swing']        # Update config
-                print("AC swing updated to {}°F".format(params['ac_swing']))
             # ===== END: Update AC Settings =====
             
             # ===== START: Update Heater Settings =====
             if 'heater_target' in params and heater_monitor:
-                heater_monitor.target_temp = params['heater_target']  # Update monitor
-                config['heater_target'] = params['heater_target']      # Update config
+                heater_monitor.target_temp = params['heater_target']
+                config['heater_target'] = params['heater_target']
                 print("Heater target updated to {}°F".format(params['heater_target']))
-            
-            if 'heater_swing' in params and heater_monitor:
-                heater_monitor.temp_swing = params['heater_swing']    # Update monitor
-                config['heater_swing'] = params['heater_swing']        # Update config
-                print("Heater swing updated to {}°F".format(params['heater_swing']))
             # ===== END: Update Heater Settings =====
             
-            # ===== START: ALWAYS enter temporary hold when Save Settings is clicked =====
-            # User clicked "Save Settings" - enter temporary hold mode
+            # ===== START: Enter hold mode based on button clicked =====
             config['schedule_enabled'] = False
-            config['permanent_hold'] = False
-            config['temp_hold_start_time'] = time.time()  # SET START TIME
-            print("⏸️ Temporary hold activated - Manual override")
+            config['permanent_hold'] = is_permanent
+            
+            if is_permanent:
+                # Permanent hold - no timer
+                config['temp_hold_start_time'] = None
+                print("🛑 Permanent hold activated - Manual control")
+            else:
+                # Temporary hold - set timer
+                config['temp_hold_start_time'] = time.time()
+                print("⏸️ Temporary hold activated - Manual override (1 hour)")
             
             # Reload schedule monitor to disable it
             if schedule_monitor:
                 schedule_monitor.reload_config(config)
-            # ===== END: ALWAYS enter temporary hold =====
+            # ===== END: Enter hold mode =====
 
             
             # ===== START: Save settings to file =====
@@ -572,7 +600,6 @@ class TempWebServer:
                 try:
                     with open('config.json', 'r') as f:
                         updated_config = json.load(f)
-                        # Update the passed-in config dict (updates reference, not copy)
                         config.clear()
                         config.update(updated_config)
                     print("✅ Config reloaded into memory")
@@ -584,28 +611,20 @@ class TempWebServer:
             # ===== START: Send Discord notification =====
             try:
                 from scripts.discord_webhook import send_discord_message
-                ac_target_str = str(params.get('ac_target', 'N/A'))
-                ac_swing_str = str(params.get('ac_swing', 'N/A'))
-                heater_target_str = str(params.get('heater_target', 'N/A'))
-                heater_swing_str = str(params.get('heater_swing', 'N/A'))
+                hold_label = "PERMANENT HOLD" if is_permanent else "TEMPORARY HOLD"
+                duration = "" if is_permanent else " (1 hour)"
                 
-                message = "⏸️ TEMPORARY HOLD - AC: {}F ± {}F | Heater: {}F ± {}F (1 hour)".format(
-                    ac_target_str, ac_swing_str, heater_target_str, heater_swing_str
+                message = "{} {} - AC: {}°F | Heater: {}°F{}".format(
+                    "🛑" if is_permanent else "⏸️",
+                    hold_label,
+                    params.get('ac_target', 'N/A'),
+                    params.get('heater_target', 'N/A'),
+                    duration
                 )
                 send_discord_message(message)
             except Exception as discord_error:
                 print("Discord notification failed: {}".format(discord_error))
             # ===== END: Send Discord notification =====
-            
-            # ===== START: Debug output =====
-            print("DEBUG: After update, monitor values are:")
-            if ac_monitor:
-                print("  AC target: {}".format(ac_monitor.target_temp))
-                print("  AC swing: {}".format(ac_monitor.temp_swing))
-            if heater_monitor:
-                print("  Heater target: {}".format(heater_monitor.target_temp))
-                print("  Heater swing: {}".format(heater_monitor.temp_swing))
-            # ===== END: Debug output =====
             
         except Exception as e:
             print("Error updating settings: {}".format(e))
@@ -1012,18 +1031,14 @@ class TempWebServer:
             </div>
         </div>
         
-        <form method="POST" action="/update" class="controls">
-            <h2 style="text-align: center; color: #34495e; margin-bottom: 20px;">⚙️ Adjust Settings</h2>
+                <form method="POST" action="/update" class="controls">
+            <h2 style="text-align: center; color: #34495e; margin-bottom: 20px;">🎯 Adjust Hold Settings</h2>
             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;">
                 <!-- ===== LEFT COLUMN: Heater ===== -->
                 <div>
                     <div class="control-group">
                         <label class="control-label">🔥 Heater Target (°F)</label>
                         <input type="number" name="heater_target" value="{heater_target}" step="0.5" min="60" max="85">
-                    </div>
-                    <div class="control-group">
-                        <label class="control-label">🔥 Heater Swing (°F)</label>
-                        <input type="number" name="heater_swing" value="{heater_swing}" step="0.5" min="0.5" max="5">
                     </div>
                 </div>
                 
@@ -1033,15 +1048,16 @@ class TempWebServer:
                         <label class="control-label">❄️ AC Target (°F)</label>
                         <input type="number" name="ac_target" value="{ac_target}" step="0.5" min="60" max="85">
                     </div>
-                    <div class="control-group">
-                        <label class="control-label">❄️ AC Swing (°F)</label>
-                        <input type="number" name="ac_swing" value="{ac_swing}" step="0.5" min="0.5" max="5">
-                    </div>
                 </div>
             </div>
             
-            <div class="control-group" style="margin-top: 20px;">
-                <button type="submit" class="btn">💾 Save Settings</button>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px;">
+                <button type="submit" name="hold_type" value="temp" class="btn" style="background: linear-gradient(135deg, #f39c12, #e67e22);">
+                    ⏸️ Temp Hold
+                </button>
+                <button type="submit" name="hold_type" value="perm" class="btn" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
+                    🛑 Perm Hold
+                </button>
             </div>
         </form>
     </div>
@@ -1059,9 +1075,12 @@ class TempWebServer:
         </div>
         {mode_buttons}
         
-        <div style="margin-top: 20px; text-align: center;">
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-top: 20px;">
             <a href="/schedule" class="btn" style="text-decoration: none; display: inline-block;">
-                ⚙️ Edit Schedules
+                📅 Edit Schedules
+            </a>
+            <a href="/settings" class="btn" style="text-decoration: none; display: inline-block; background: linear-gradient(135deg, #95a5a6, #7f8c8d);">
+                ⚙️ Advanced Settings
             </a>
         </div>
     </div>
@@ -1229,9 +1248,16 @@ class TempWebServer:
 
     def _get_schedule_editor_page(self, sensors, ac_monitor, heater_monitor):
         """Generate schedule editor page (no auto-refresh, schedules only)."""
-        # Get current temps (use cached to avoid blocking)
-        inside_temp = getattr(sensors.get('inside'), 'last_temp', None) or "N/A"
-        outside_temp = getattr(sensors.get('outside'), 'last_temp', None) or "N/A"
+        # Get current temps (read if not cached)
+        inside_temp = getattr(sensors.get('inside'), 'last_temp', None)
+        if inside_temp is None:
+            inside_temps = sensors['inside'].read_all_temps(unit='F')
+            inside_temp = list(inside_temps.values())[0] if inside_temps else "N/A"
+        
+        outside_temp = getattr(sensors.get('outside'), 'last_temp', None)
+        if outside_temp is None:
+            outside_temps = sensors['outside'].read_all_temps(unit='F')
+            outside_temp = list(outside_temps.values())[0] if outside_temps else "N/A"
         
         # Format temperature values
         inside_temp_str = "{:.1f}".format(inside_temp) if isinstance(inside_temp, float) else str(inside_temp)
@@ -1464,3 +1490,250 @@ class TempWebServer:
                 </div>
             </form>
             """
+            
+    def _get_settings_page(self, sensors, ac_monitor, heater_monitor):
+        """Generate advanced settings page."""
+        config = self._load_config()
+        
+        # Get temperatures (read if not cached)
+        inside_temp = getattr(sensors.get('inside'), 'last_temp', None)
+        if inside_temp is None:
+            inside_temps = sensors['inside'].read_all_temps(unit='F')
+            inside_temp = list(inside_temps.values())[0] if inside_temps else "N/A"
+        
+        outside_temp = getattr(sensors.get('outside'), 'last_temp', None)
+        if outside_temp is None:
+            outside_temps = sensors['outside'].read_all_temps(unit='F')
+            outside_temp = list(outside_temps.values())[0] if outside_temps else "N/A"
+        
+        inside_temp_str = "{:.1f}".format(inside_temp) if isinstance(inside_temp, float) else str(inside_temp)
+        outside_temp_str = "{:.1f}".format(outside_temp) if isinstance(outside_temp, float) else str(outside_temp)
+        
+        html = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Advanced Settings - Climate Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8">
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }}
+        .container {{
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }}
+        h1 {{
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
+        }}
+        .header-info {{
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }}
+        .setting-group {{
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }}
+        .setting-group h3 {{
+            color: #34495e;
+            margin-bottom: 15px;
+        }}
+        label {{
+            display: block;
+            margin: 15px 0 5px 0;
+            font-weight: bold;
+            color: #555;
+        }}
+        input[type="number"] {{
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }}
+        input[type="number"]:focus {{
+            border-color: #667eea;
+            outline: none;
+        }}
+        .btn {{
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            text-decoration: none;
+            display: inline-block;
+            width: 100%;
+        }}
+        .btn:hover {{ transform: translateY(-2px); }}
+        .btn-secondary {{
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+            margin-top: 10px;
+        }}
+        .info-box {{
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚙️ Advanced Settings</h1>
+        
+        <div class="header-info">
+            <div>🏠 Inside: <strong>{inside_temp}°F</strong></div>
+            <div>🌡️ Outside: <strong>{outside_temp}°F</strong></div>
+        </div>
+        
+        <div class="info-box">
+            💡 <strong>Note:</strong> These settings control the tolerance ranges for automatic climate control. Changes take effect immediately.
+        </div>
+        
+        <form method="POST" action="/settings">
+            <div class="setting-group">
+                <h3>🔥 Heating System</h3>
+                <label>Heater Swing (±°F)</label>
+                <input type="number" name="heater_swing" value="{heater_swing}" step="0.5" min="0.5" max="5" required>
+                <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                    How many degrees below target before heater turns ON
+                </small>
+            </div>
+            
+            <div class="setting-group">
+                <h3>❄️ Air Conditioning</h3>
+                <label>AC Swing (±°F)</label>
+                <input type="number" name="ac_swing" value="{ac_swing}" step="0.5" min="0.5" max="5" required>
+                <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                    How many degrees above target before AC turns ON
+                </small>
+            </div>
+            
+            <div class="setting-group">
+                <h3>⏱️ Hold Duration</h3>
+                <label>Temporary Hold Duration (minutes)</label>
+                <input type="number" name="temp_hold_duration" value="{temp_hold_mins}" step="1" min="1" max="1440" required>
+                <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                    How long temporary holds last before auto-resuming (default: 60 min)
+                </small>
+            </div>
+            
+            <div class="setting-group">
+                <h3>🌐 Timezone</h3>
+                <label>UTC Offset (hours)</label>
+                <input type="number" name="timezone_offset" value="{timezone_offset}" step="1" min="-12" max="14" required>
+                <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                    CST=-6, CDT=-5, EST=-5, EDT=-4, MST=-7, PST=-8
+                </small>
+            </div>
+            
+            <button type="submit" class="btn">💾 Save Settings</button>
+        </form>
+        
+        <a href="/" class="btn btn-secondary" style="text-align: center;">⬅️ Back to Dashboard</a>
+    </div>
+</body>
+</html>
+        """.format(
+            inside_temp=inside_temp_str,
+            outside_temp=outside_temp_str,
+            heater_swing=config.get('heater_swing', 2.0),
+            ac_swing=config.get('ac_swing', 1.0),
+            temp_hold_mins=int(config.get('temp_hold_duration', 3600) / 60),
+            timezone_offset=config.get('timezone_offset', -6)
+        )
+        
+        return html
+    
+    def _handle_settings_update(self, request, sensors, ac_monitor, heater_monitor, schedule_monitor, config):
+        """Handle advanced settings update."""
+        try:
+            body = request.split('\r\n\r\n')[1] if '\r\n\r\n' in request else ''
+            params = {}
+            
+            for pair in body.split('&'):
+                if '=' in pair:
+                    key, value = pair.split('=', 1)
+                    params[key] = float(value)
+            
+            # Update swing settings
+            if 'ac_swing' in params:
+                config['ac_swing'] = params['ac_swing']
+                if ac_monitor:
+                    ac_monitor.temp_swing = params['ac_swing']
+                print("AC swing updated to {}°F".format(params['ac_swing']))
+            
+            if 'heater_swing' in params:
+                config['heater_swing'] = params['heater_swing']
+                if heater_monitor:
+                    heater_monitor.temp_swing = params['heater_swing']
+                print("Heater swing updated to {}°F".format(params['heater_swing']))
+            
+            # Update hold duration (convert minutes to seconds)
+            if 'temp_hold_duration' in params:
+                duration_seconds = int(params['temp_hold_duration'] * 60)
+                config['temp_hold_duration'] = duration_seconds
+                if schedule_monitor:
+                    schedule_monitor.temp_hold_duration = duration_seconds
+                print("Temp hold duration updated to {} minutes".format(int(params['temp_hold_duration'])))
+            
+            # Update timezone offset
+            if 'timezone_offset' in params:
+                config['timezone_offset'] = int(params['timezone_offset'])
+                print("Timezone offset updated to UTC{:+d}".format(int(params['timezone_offset'])))
+            
+            # Save to file
+            if self._save_config_to_file(config):
+                print("Advanced settings saved")
+                
+                # Reload config
+                try:
+                    with open('config.json', 'r') as f:
+                        updated_config = json.load(f)
+                        config.clear()
+                        config.update(updated_config)
+                    print("✅ Config reloaded")
+                except Exception as e:
+                    print("⚠️ Could not reload: {}".format(e))
+            
+            # Discord notification
+            try:
+                from scripts.discord_webhook import send_discord_message
+                send_discord_message("⚙️ Advanced settings updated")
+            except:
+                pass
+            
+        except Exception as e:
+            print("Error updating settings: {}".format(e))
+            import sys
+            sys.print_exception(e)
+        
+        # Redirect to dashboard
+        redirect_response = 'HTTP/1.1 303 See Other\r\n'
+        redirect_response += 'Location: /\r\n'
+        redirect_response += 'Content-Length: 0\r\n'
+        redirect_response += 'Connection: close\r\n'
+        redirect_response += '\r\n'
+        return redirect_response
