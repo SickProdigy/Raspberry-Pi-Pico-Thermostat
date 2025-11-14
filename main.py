@@ -21,7 +21,7 @@ except Exception as e:
 
 # Import after WiFi reset
 from scripts.networking import connect_wifi
-import scripts.discord_webhook as discord_webhook
+
 from scripts.monitors import TemperatureMonitor, WiFiMonitor, ACMonitor, HeaterMonitor, run_monitors
 from scripts.temperature_sensor import TemperatureSensor
 from scripts.air_conditioning import ACController
@@ -146,6 +146,7 @@ def load_config():
 
 # Load configuration from file
 config = load_config()
+import scripts.discord_webhook as discord_webhook
 # Initialize discord webhook module with loaded config (must be done BEFORE any send_discord_message calls)
 discord_webhook.set_config(config)
 
@@ -172,7 +173,7 @@ except Exception as e:
 # ===== END: Configuration Loading =====
 
 # ===== START: WiFi Connection =====
-# Connect to WiFi using credentials from secrets.py
+# Connect to WiFi using credentials from config.json
 wifi = connect_wifi(led, config=config)
 
 # Set static IP and print WiFi details
