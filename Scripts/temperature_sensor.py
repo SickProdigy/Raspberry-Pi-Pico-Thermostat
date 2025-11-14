@@ -1,7 +1,7 @@
-import machine
-import onewire
-import ds18x20
-import time
+import machine # type: ignore
+import onewire # type: ignore
+import ds18x20 # type: ignore
+import time # type: ignore
 
 class TemperatureSensor:
     def __init__(self, pin=10, label=None):
