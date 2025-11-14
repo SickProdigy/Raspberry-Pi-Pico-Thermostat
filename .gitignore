@@ -1,5 +1,6 @@
 /__pycache__/
 secrets.py
+config.json
 /pymakr-test/
 .gitignore
 .vscode/
