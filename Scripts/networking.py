@@ -1,5 +1,5 @@
-import network
-import time
+import network # type: ignore
+import time # type: ignore
 
 def connect_wifi(led=None, max_retries=3, timeout=20, config=None):
     """
