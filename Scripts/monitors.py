@@ -1,5 +1,5 @@
 import time # type: ignore
-from scripts.discord_webhook import send_discord_message
+import scripts.discord_webhook as discord_webhook
 from scripts.temperature_sensor import TemperatureSensor
 
 class Monitor:
@@ -108,13 +108,11 @@ class TemperatureMonitor(Monitor):
             self.alert_start_time = current_time
             print(alert_message)
             
-            # Send to appropriate Discord channel
+            # send alert (use module-level discord_webhook; set_config must be called in main)
             if self.send_alerts_to_separate_channel:
-                from scripts.discord_webhook import send_discord_message
-                send_discord_message(alert_message, is_alert=True)
+                discord_webhook.send_discord_message(alert_message, is_alert=True)
             else:
-                from scripts.discord_webhook import send_discord_message
-                send_discord_message(alert_message)
+                discord_webhook.send_discord_message(alert_message)
             
             self.alert_sent = True
             
@@ -139,13 +137,11 @@ class TemperatureMonitor(Monitor):
             )
             print(recovery_message)
             
-            # Send to appropriate Discord channel
+            # send recovery message
             if self.send_alerts_to_separate_channel:
-                from scripts.discord_webhook import send_alert_message
-                send_alert_message(recovery_message)
+                discord_webhook.send_discord_message(recovery_message, is_alert=True)
             else:
-                from scripts.discord_webhook import send_discord_message
-                send_discord_message(recovery_message)
+                discord_webhook.send_discord_message(recovery_message)
             
             self.alert_sent = False
             self.alert_start_time = None
@@ -198,14 +194,14 @@ class ACMonitor(Monitor):
             # Too hot, turn AC on
             if self.ac.turn_on():
                 if not self.last_notified_state:
-                    send_discord_message(f"❄️ AC turned ON - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
+                    discord_webhook.send_discord_message(f"❄️ AC turned ON - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
                     self.last_notified_state = True
         
         elif current_temp < (self.target_temp - self.temp_swing):
             # Cool enough, turn AC off
             if self.ac.turn_off():
                 if self.last_notified_state:
-                    send_discord_message(f"✅ AC turned OFF - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
+                    discord_webhook.send_discord_message(f"✅ AC turned OFF - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
                     self.last_notified_state = False
         
         # Else: within temp_swing range, maintain current state
@@ -244,27 +240,28 @@ class HeaterMonitor(Monitor):
             # Too cold, turn heater on
             if self.heater.turn_on():
                 if not self.last_notified_state:
-                    send_discord_message(f"🔥 Heater turned ON - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
+                    discord_webhook.send_discord_message(f"🔥 Heater turned ON - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
                     self.last_notified_state = True
         
         elif current_temp > (self.target_temp + self.temp_swing):
             # Warm enough, turn heater off
             if self.heater.turn_off():
                 if self.last_notified_state:
-                    send_discord_message(f"✅ Heater turned OFF - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
+                    discord_webhook.send_discord_message(f"✅ Heater turned OFF - Current: {current_temp:.1f}°F, Target: {self.target_temp:.1f}°F")
                     self.last_notified_state = False
         
         # Else: within temp_swing range, maintain current state
 
 class WiFiMonitor(Monitor):
     """Monitor WiFi connection and handle reconnection."""
-    def __init__(self, wifi, led, interval=5, reconnect_cooldown=60):
+    def __init__(self, wifi, led, interval=5, reconnect_cooldown=60, config=None):
         super().__init__(interval)
         self.wifi = wifi
         self.led = led
         self.reconnect_cooldown = reconnect_cooldown
         self.last_reconnect_attempt = 0
         self.was_connected = wifi.isconnected() if wifi else False
+        self.config = config
     
     def run(self):
         """Check WiFi status, blink LED, attempt reconnect if needed."""
@@ -284,10 +281,10 @@ class WiFiMonitor(Monitor):
             if time.ticks_diff(now, self.last_reconnect_attempt) >= (self.reconnect_cooldown * 1000):
                 self.last_reconnect_attempt = now
                 # print("Attempting WiFi reconnect...")
-                self.wifi = connect_wifi(self.led)
+                self.wifi = connect_wifi(self.led, config=self.config)
                 
                 if self.wifi and self.wifi.isconnected():
-                    send_discord_message("WiFi connection restored 🔄")
+                    discord_webhook.send_discord_message("WiFi connection restored 🔄")
                     self.was_connected = True
         else:
             # Slow blink when connected
@@ -297,7 +294,7 @@ class WiFiMonitor(Monitor):
             
             # Notify if connection was just restored
             if not self.was_connected:
-                send_discord_message("WiFi connection restored 🔄")
+                discord_webhook.send_discord_message("WiFi connection restored 🔄")
                 self.was_connected = True
 
 def run_monitors(monitors):

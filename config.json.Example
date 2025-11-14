@@ -1,0 +1,45 @@
+{
+    "static_ip": "192.168.1.69",
+    "subnet": "255.255.255.0",
+    "gateway": "192.168.1.1",
+    "dns": "192.168.1.1",
+    "timezone_offset": -5,
+    "ssid": " Change_to_wifi_SSID",
+    "password": "Change_to_wifi_Pasword",
+    "discord_webhook_url": "https://discord.com/api/webhooks/key/long-Combination_1234-ChangeMe",
+    "discord_alert_webhook_url": "https://discord.com/api/webhooks/key/long-Combination_1234-ChangeMe",
+    "ac_target": 77.0,
+    "ac_swing": 1.0,
+    "heater_target": 72.0,
+    "heater_swing": 2.0,
+    "temp_hold_duration": 3600,
+    "schedules": [
+        {
+            "time": "06:00",
+            "ac_target": 75.0,
+            "heater_target": 72.0,
+            "name": "Morning"
+        },
+        {
+            "time": "12:00",
+            "ac_target": 75.0,
+            "heater_target": 72.0,
+            "name": "Midday"
+        },
+        {
+            "time": "18:00",
+            "ac_target": 75.0,
+            "heater_target": 72.0,
+            "name": "Evening"
+        },
+        {
+            "time": "22:00",
+            "ac_target": 75.0,
+            "heater_target": 72.0,
+            "name": "Night"
+        }
+    ],
+    "schedule_enabled": true,
+    "permanent_hold": false,
+    "temp_hold_start_time": null
+}

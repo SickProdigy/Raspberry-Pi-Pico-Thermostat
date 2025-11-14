@@ -90,32 +90,61 @@ class ScheduleMonitor:
             return  # Already applied
 
         try:
+            # Track whether we changed persisted values to avoid unnecessary writes
+            changed = False
+
             # Update AC settings if provided
             if 'ac_target' in schedule:
-                self.ac_monitor.target_temp = float(schedule['ac_target'])
-                self.config['ac_target'] = float(schedule['ac_target'])
+                new_ac = float(schedule['ac_target'])
+                if self.config.get('ac_target') != new_ac:
+                    self.config['ac_target'] = new_ac
+                    changed = True
+                self.ac_monitor.target_temp = new_ac
 
             if 'ac_swing' in schedule:
-                self.ac_monitor.temp_swing = float(schedule['ac_swing'])
-                self.config['ac_swing'] = float(schedule['ac_swing'])  
+                new_ac_swing = float(schedule['ac_swing'])
+                if self.config.get('ac_swing') != new_ac_swing:
+                    self.config['ac_swing'] = new_ac_swing
+                    changed = True
+                self.ac_monitor.temp_swing = new_ac_swing
 
             # Update heater settings if provided
             if 'heater_target' in schedule:
-                self.heater_monitor.target_temp = float(schedule['heater_target'])
-                self.config['heater_target'] = float(schedule['heater_target'])
+                new_ht = float(schedule['heater_target'])
+                if self.config.get('heater_target') != new_ht:
+                    self.config['heater_target'] = new_ht
+                    changed = True
+                self.heater_monitor.target_temp = new_ht
 
             if 'heater_swing' in schedule:
-                self.heater_monitor.temp_swing = float(schedule['heater_swing'])
-                self.config['heater_swing'] = float(schedule['heater_swing'])
+                new_ht_swing = float(schedule['heater_swing'])
+                if self.config.get('heater_swing') != new_ht_swing:
+                    self.config['heater_swing'] = new_ht_swing
+                    changed = True
+                self.heater_monitor.temp_swing = new_ht_swing
 
-            # Save updated config to file so targets persist
-            try:
-                import json
-                with open('config.json', 'w') as f:
-                    json.dump(self.config, f)
-                print("✅ Config updated with active schedule targets")
-            except Exception as e:
-                print("⚠️ Could not save config: {}".format(e))
+            # Save updated config only if something changed
+            if changed:
+                try:
+                    import json
+                    with open('config.json', 'w') as f:
+                        json.dump(self.config, f)
+                except Exception as e:
+                    print("⚠️ Could not save config: {}".format(e))
+                else:
+                    # import once and update module-level webhook config
+                    try:
+                        import scripts.discord_webhook as discord_webhook
+                        discord_webhook.set_config(self.config)
+                    except Exception:
+                        pass
+                    print("✅ Config updated with active schedule targets")
+            else:
+                # nothing to persist
+                try:
+                    import scripts.discord_webhook as discord_webhook
+                except Exception:
+                    discord_webhook = None
 
             # Log the change
             schedule_name = schedule.get('name', 'Unnamed')
@@ -125,21 +154,22 @@ class ScheduleMonitor:
             print("AC Target:      {}°F".format(self.ac_monitor.target_temp))
             print("Heater Target:  {}°F".format(self.heater_monitor.target_temp))
             print("="*50 + "\n")
-            
-            # Send Discord notification
+
+            # Send Discord notification (use discord_webhook if available)
             try:
-                from scripts.discord_webhook import send_discord_message
+                if 'discord_webhook' not in locals() or discord_webhook is None:
+                    import scripts.discord_webhook as discord_webhook
                 message = "🕐 Schedule '{}' applied - AC: {}°F | Heater: {}°F".format(
                     schedule_name,
                     self.ac_monitor.target_temp,
                     self.heater_monitor.target_temp
                 )
-                send_discord_message(message)
-            except:
+                discord_webhook.send_discord_message(message)
+            except Exception:
                 pass
-            
+
             self.last_applied_schedule = schedule_id
-            
+
         except Exception as e:
             print("Error applying schedule: {}".format(e))
 
@@ -165,16 +195,24 @@ class ScheduleMonitor:
                         import json
                         with open('config.json', 'w') as f:
                             json.dump(self.config, f)
-                        print("✅ Config updated - automatic mode resumed")
                     except Exception as e:
                         print("⚠️ Could not save config: {}".format(e))
-                    
-                    # Notify user
-                    try:
-                        from scripts.discord_webhook import send_discord_message
-                        send_discord_message("⏰ Temporary hold expired - Schedule resumed automatically")
-                    except:
-                        pass
+                    else:
+                        # ensure in-memory webhook config updated
+                        try:
+                            import scripts.discord_webhook as discord_webhook
+                            discord_webhook.set_config(self.config)
+                        except Exception:
+                            pass
+
+                        print("✅ Config updated - automatic mode resumed")
+
+                        # Notify user
+                        try:
+                            import scripts.discord_webhook as discord_webhook
+                            discord_webhook.send_discord_message("⏰ Temporary hold expired - Schedule resumed automatically")
+                        except Exception:
+                            pass
         # ===== END: Check if temporary hold has expired =====
         
         # Find and apply active schedule

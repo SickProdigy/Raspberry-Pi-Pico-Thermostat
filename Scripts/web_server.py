@@ -1,6 +1,9 @@
 import socket
 import time # type: ignore
 import json
+import scripts.discord_webhook as discord_webhook
+import os
+
 
 class TempWebServer:
     """Simple web server for viewing temperatures and adjusting settings."""
@@ -106,8 +109,8 @@ class TempWebServer:
                 response_bytes = response.encode('utf-8')
                 
                 # Send headers
-                conn.send('HTTP/1.1 200 OK\r\n')
-                conn.send('Content-Type: text/html; charset=utf-8\r\n')
+                conn.sendall(b'HTTP/1.1 200 OK\r\n')
+                conn.sendall(b'Content-Type: text/html; charset=utf-8\r\n')
                 conn.send('Content-Length: {}\r\n'.format(len(response_bytes)))
                 conn.send('Connection: close\r\n')
                 conn.send('\r\n')
@@ -224,6 +227,12 @@ class TempWebServer:
             # Rename temp to config (atomic on most filesystems)
             os.rename('config.tmp', 'config.json')
             
+            # Update discord module in-memory config so webhook URLs are current
+            try:
+                discord_webhook.set_config(config)
+            except Exception:
+                pass
+    
             print("Settings saved to config.json")
             return True
         except Exception as e:
@@ -276,8 +285,7 @@ class TempWebServer:
                 
                 # Send Discord notification
                 try:
-                    from scripts.discord_webhook import send_discord_message
-                    send_discord_message("▶️ Schedule resumed - Automatic temperature control active")
+                    discord_webhook.send_discord_message("▶️ Schedule resumed - Automatic temperature control active")
                 except:
                     pass
                 
@@ -302,8 +310,7 @@ class TempWebServer:
                         schedule_monitor.reload_config(config)
                 
                 try:
-                    from scripts.discord_webhook import send_discord_message
-                    send_discord_message("⏸️ Temporary hold - Schedules paused, manual control active")
+                    discord_webhook.send_discord_message("⏸️ Temporary hold - Schedules paused, manual control active")
                 except:
                     pass
                 
@@ -327,8 +334,7 @@ class TempWebServer:
                         schedule_monitor.reload_config(config)
                 
                 try:
-                    from scripts.discord_webhook import send_discord_message
-                    send_discord_message("🛑 Permanent hold - Schedules disabled, manual control only")
+                    discord_webhook.send_discord_message("🛑 Permanent hold - Schedules disabled, manual control only")
                 except:
                     pass
                 
@@ -490,12 +496,11 @@ class TempWebServer:
             
             # Send Discord notification
             try:
-                from scripts.discord_webhook import send_discord_message
                 mode = "automatic" if config.get('schedule_enabled') else "hold"
                 message = "📅 Schedules updated ({} mode) - {} schedules configured".format(
                     mode, len(schedules)
                 )
-                send_discord_message(message)
+                discord_webhook.send_discord_message(message)
             except:
                 pass
             # ===== END: Handle schedule configuration save =====
@@ -611,7 +616,6 @@ class TempWebServer:
             
             # ===== START: Send Discord notification =====
             try:
-                from scripts.discord_webhook import send_discord_message
                 hold_label = "PERMANENT HOLD" if is_permanent else "TEMPORARY HOLD"
                 duration = "" if is_permanent else " (1 hour)"
                 
@@ -622,7 +626,7 @@ class TempWebServer:
                     params.get('heater_target', 'N/A'),
                     duration
                 )
-                send_discord_message(message)
+                discord_webhook.send_discord_message(message)
             except Exception as discord_error:
                 print("Discord notification failed: {}".format(discord_error))
             # ===== END: Send Discord notification =====
@@ -1754,8 +1758,7 @@ class TempWebServer:
             
             # Discord notification
             try:
-                from scripts.discord_webhook import send_discord_message
-                send_discord_message("⚙️ Advanced settings updated")
+                discord_webhook.send_discord_message("⚙️ Advanced settings updated")
             except:
                 pass
             

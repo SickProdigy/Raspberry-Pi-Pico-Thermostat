@@ -21,7 +21,7 @@ except Exception as e:
 
 # Import after WiFi reset
 from scripts.networking import connect_wifi
-from scripts.discord_webhook import send_discord_message
+import scripts.discord_webhook as discord_webhook
 from scripts.monitors import TemperatureMonitor, WiFiMonitor, ACMonitor, HeaterMonitor, run_monitors
 from scripts.temperature_sensor import TemperatureSensor
 from scripts.air_conditioning import ACController
@@ -146,6 +146,8 @@ def load_config():
 
 # Load configuration from file
 config = load_config()
+# Initialize discord webhook module with loaded config (must be done BEFORE any send_discord_message calls)
+discord_webhook.set_config(config)
 
 # Get timezone offset from config (with fallback to -6 if not present)
 TIMEZONE_OFFSET = config.get('timezone_offset', -6)
@@ -171,7 +173,7 @@ except Exception as e:
 
 # ===== START: WiFi Connection =====
 # Connect to WiFi using credentials from secrets.py
-wifi = connect_wifi(led)
+wifi = connect_wifi(led, config=config)
 
 # Set static IP and print WiFi details
 if wifi and wifi.isconnected():
@@ -199,7 +201,7 @@ if wifi and wifi.isconnected():
     
     # Send startup notification to Discord (with timeout, non-blocking)
     try:
-        success = send_discord_message(f"Pico W online at http://{ifconfig[0]} ✅")
+        success = discord_webhook.send_discord_message(f"Pico W online at http://{ifconfig[0]} ✅")
         if success:
             print("Discord startup notification sent")
         else:
@@ -345,7 +347,7 @@ check_memory_once()
 # Set up all monitoring systems (run in order during main loop)
 monitors = [
     # WiFi monitor: Checks connection, reconnects if needed, blinks LED
-    WiFiMonitor(wifi, led, interval=5, reconnect_cooldown=60),
+    WiFiMonitor(wifi, led, interval=5, reconnect_cooldown=60, config=config),
     
     # Schedule monitor: Changes temp targets based on time of day
     schedule_monitor,
