@@ -2,8 +2,6 @@ import socket
 import time # type: ignore
 import json
 import scripts.discord_webhook as discord_webhook
-import os
-
 
 class TempWebServer:
     """Simple web server for viewing temperatures and adjusting settings."""

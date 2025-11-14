@@ -1,5 +1,5 @@
-from machine import Pin
-import time
+from machine import Pin # type: ignore
+import time # type: ignore
 
 class ACController:
     """Control AC unit via opto-coupler relay."""

@@ -38,7 +38,7 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
     try:
         # local import to save RAM
         import urequests as requests  # type: ignore
-        import gc
+        import gc # type: ignore
 
         url = str(url).strip().strip('\'"')
         content = _escape_json_str(message)
