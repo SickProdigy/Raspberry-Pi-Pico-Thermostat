@@ -109,15 +109,15 @@ class TempWebServer:
                 # Send headers
                 conn.sendall(b'HTTP/1.1 200 OK\r\n')
                 conn.sendall(b'Content-Type: text/html; charset=utf-8\r\n')
-                conn.send('Content-Length: {}\r\n'.format(len(response_bytes)))
-                conn.send('Connection: close\r\n')
-                conn.send('\r\n')
+                conn.sendall('Content-Length: {}\r\n'.format(len(response_bytes)).encode('utf-8'))
+                conn.sendall(b'Connection: close\r\n')
+                conn.sendall(b'\r\n')
                 
                 # Send body in chunks (MicroPython has small socket buffer)
                 chunk_size = 1024  # Send 1KB at a time
                 for i in range(0, len(response_bytes), chunk_size):
                     chunk = response_bytes[i:i+chunk_size]
-                    conn.send(chunk)
+                    conn.sendall(chunk)
                     print("DEBUG: Sent chunk {} ({} bytes)".format(i//chunk_size + 1, len(chunk)))
                 
                 conn.close()
@@ -128,16 +128,16 @@ class TempWebServer:
                 response = self._get_settings_page(sensors, ac_monitor, heater_monitor)
                 response_bytes = response.encode('utf-8')
                 
-                conn.send('HTTP/1.1 200 OK\r\n')
-                conn.send('Content-Type: text/html; charset=utf-8\r\n')
-                conn.send('Content-Length: {}\r\n'.format(len(response_bytes)))
-                conn.send('Connection: close\r\n')
-                conn.send('\r\n')
+                conn.sendall(b'HTTP/1.1 200 OK\r\n')
+                conn.sendall(b'Content-Type: text/html; charset=utf-8\r\n')
+                conn.sendall('Content-Length: {}\r\n'.format(len(response_bytes)).encode('utf-8'))
+                conn.sendall(b'Connection: close\r\n')
+                conn.sendall(b'\r\n')
                 
                 chunk_size = 1024
                 for i in range(0, len(response_bytes), chunk_size):
                     chunk = response_bytes[i:i+chunk_size]
-                    conn.send(chunk)
+                    conn.sendall(chunk)
                 
                 conn.close()
                 print("DEBUG: Settings page sent successfully ({} bytes total)".format(len(response_bytes)))
@@ -161,9 +161,21 @@ class TempWebServer:
                     print("DEBUG: Redirect sent, connection closed")
                     return
 
+            elif 'GET /sched.js' in request:
+                js = self._build_sched_js()  # bytes
+                conn.sendall(b'HTTP/1.1 200 OK\r\n')
+                conn.sendall(b'Content-Type: application/javascript; charset=utf-8\r\n')
+                conn.sendall('Content-Length: {}\r\n'.format(len(js)).encode('utf-8'))
+                conn.sendall(b'Cache-Control: max-age=300\r\n')
+                conn.sendall(b'Connection: close\r\n')
+                conn.sendall(b'\r\n')
+                conn.sendall(js)
+                conn.close()
+                return
+
             elif 'GET /ping' in request:
                 # Quick health check endpoint (no processing)
-                conn.send('HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n')
+                conn.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n')
                 conn.sendall(b'OK')
                 conn.close()
                 return
@@ -183,11 +195,11 @@ class TempWebServer:
                     conn.sendall(response.encode('utf-8'))
                 else:
                     # HTML response needs headers added first
-                    conn.send(b'HTTP/1.1 200 OK\r\n')
-                    conn.send(b'Content-Type: text/html; charset=utf-8\r\n')
-                    conn.send('Content-Length: {}\r\n'.format(len(response.encode('utf-8'))).encode('utf-8'))
-                    conn.send(b'Connection: close\r\n')
-                    conn.send(b'\r\n')  # Blank line separates headers from body
+                    conn.sendall(b'HTTP/1.1 200 OK\r\n')
+                    conn.sendall(b'Content-Type: text/html; charset=utf-8\r\n')
+                    conn.sendall('Content-Length: {}\r\n'.format(len(response.encode('utf-8'))).encode('utf-8'))
+                    conn.sendall(b'Connection: close\r\n')
+                    conn.sendall(b'\r\n')  # Blank line separates headers from body
                     conn.sendall(response.encode('utf-8'))
                 
                 print("DEBUG: Response sent successfully")
@@ -204,6 +216,23 @@ class TempWebServer:
             print("Web server error: {}".format(e))
             import sys
             sys.print_exception(e)
+
+    def _build_sched_js(self):
+        # Keep this as bytes; no .format() so no brace escaping and less RAM churn
+        return (b"// schedule page sync\n"
+                b"window.schedSync=function(i,w){var h=document.querySelector('input[name=\"schedule_'+i+'_heater\"]');"
+                b"var a=document.querySelector('input[name=\"schedule_'+i+'_ac\"]');"
+                b"var l=document.getElementById('schedule_'+i+'_last_changed');"
+                b"if(!h||!a)return;var hv=parseFloat(h.value),av=parseFloat(a.value);"
+                b"if(w==='heater'){if(!isNaN(hv)&&!isNaN(av)&&hv>av){a.value=hv;} if(l)l.value='heater';}"
+                b"else{if(!isNaN(hv)&&!isNaN(av)&&av<hv){h.value=av;} if(l)l.value='ac';}};"
+                b"document.addEventListener('DOMContentLoaded',function(){var f=document.querySelector('form[action=\"/schedule\"]');"
+                b"if(!f)return;f.addEventListener('submit',function(){for(var i=0;i<4;i++){"
+                b"var h=document.querySelector('input[name=\"schedule_'+i+'_heater\"]');"
+                b"var a=document.querySelector('input[name=\"schedule_'+i+'_ac\"]');"
+                b"var l=document.getElementById('schedule_'+i+'_last_changed');"
+                b"if(!h||!a)continue;var hv=parseFloat(h.value),av=parseFloat(a.value);"
+                b"if(isNaN(hv)||isNaN(av))continue;if(hv>av){if(l&&l.value==='ac'){h.value=av;}else{a.value=hv;}}}});});")
 
     def _save_config_to_file(self, config):
         """Save configuration to config.json file (atomic write)."""
@@ -685,7 +714,11 @@ class TempWebServer:
         # ===== FORCE GARBAGE COLLECTION BEFORE BIG ALLOCATION =====
         import gc # type: ignore
         gc.collect()
-        print("DEBUG: Memory freed, {} bytes available".format(gc.mem_free()))
+        try:
+            mf = gc.mem_free()  # type: ignore
+            print("DEBUG: Memory freed, {} bytes available".format(mf))
+        except Exception:
+            print("DEBUG: Memory collected")
         # ===== END GARBAGE COLLECTION =====
         
         try:
@@ -1506,48 +1539,7 @@ document.addEventListener('DOMContentLoaded', function() {{
                 To change modes (Automatic/Hold), return to the dashboard
             </div>
         </div>
-
-<script>
-// Make schedSync available to inline handlers immediately
-window.schedSync = function(i, which) {{
-    var h = document.querySelector('input[name="schedule_' + i + '_heater"]');
-    var a = document.querySelector('input[name="schedule_' + i + '_ac"]');
-    var last = document.getElementById('schedule_' + i + '_last_changed');
-    if (!h || !a) return;
-    var hv = parseFloat(h.value), av = parseFloat(a.value);
-
-    if (which === 'heater') {{
-        if (!isNaN(hv) && !isNaN(av) && hv > av) {{ a.value = hv; }}
-        if (last) last.value = 'heater';
-    }} else {{
-        if (!isNaN(hv) && !isNaN(av) && av < hv) {{ h.value = av; }}
-        if (last) last.value = 'ac';
-    }}
-}};
-
-document.addEventListener('DOMContentLoaded', function() {{
-    // Submit-time safety: enforce rule per row
-    var form = document.querySelector('form[action="/schedule"]');
-    if (form) {{
-        form.addEventListener('submit', function() {{
-            for (var i = 0; i < 4; i++) {{
-                var h = document.querySelector('input[name="schedule_' + i + '_heater"]');
-                var a = document.querySelector('input[name="schedule_' + i + '_ac"]');
-                var last = document.getElementById('schedule_' + i + '_last_changed');
-                if (!h || !a) continue;
-                var hv = parseFloat(h.value), av = parseFloat(a.value);
-                if (isNaN(hv) || isNaN(av)) continue;
-
-                if (hv > av) {{
-                    if (last && last.value === 'ac') {{ h.value = av; }}   // AC lowered → match heat down
-                    else {{ a.value = hv; }}                               // Heat raised → match AC up
-                }}
-            }}
-        }});
-    }}
-}});
-</script>
-
+<script defer src="/sched.js"></script>
     </body>
     </html>
         """.format(
