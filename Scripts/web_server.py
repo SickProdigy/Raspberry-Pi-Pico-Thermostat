@@ -1507,29 +1507,64 @@ document.addEventListener('DOMContentLoaded', function() {{
         </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {{
-    // For each schedule row, wire up sync both ways
-    document.querySelectorAll('.sched').forEach(function(row) {{
-        var heater = row.querySelector('input[name$="_heater"]');
-        var ac = row.querySelector('input[name$="_ac"]');
-        if (!heater || !ac) return;
-        function syncFromHeater() {{
-            var h = parseFloat(heater.value);
-            var a = parseFloat(ac.value);
-            if (!isNaN(h) && !isNaN(a) && h > a) {{
-                ac.value = h;
-            }}
+    var form = document.querySelector('form[action="/schedule"]');
+    if (!form) return;
+
+    function getPairByTarget(t) {{
+        var m = t.name && t.name.match(/^schedule_(\d+)_(heater|ac)$/);
+        if (!m) return null;
+        var i = m[1];
+        return {{
+            heater: form.querySelector('input[name="schedule_' + i + '_heater"]'),
+            ac: form.querySelector('input[name="schedule_' + i + '_ac"]')
+        }};
+    }}
+
+    function syncFromHeater(h, a) {{
+        var hv = parseFloat(h.value), av = parseFloat(a.value);
+        if (!isNaN(hv) && !isNaN(av) && hv > av) a.value = hv;
+    }}
+
+    function syncFromAc(h, a) {{
+        var hv = parseFloat(h.value), av = parseFloat(a.value);
+        if (!isNaN(hv) && !isNaN(av) && av < hv) h.value = av;
+    }}
+
+    // Live sync via event delegation (handles all rows)
+    form.addEventListener('input', function(e) {{
+        if (!e.target.name) return;
+        var pair = getPairByTarget(e.target);
+        if (!pair || !pair.heater || !pair.ac) return;
+        if (e.target.name.endsWith('_heater')) syncFromHeater(pair.heater, pair.ac);
+        else if (e.target.name.endsWith('_ac')) syncFromAc(pair.heater, pair.ac);
+    }});
+
+    form.addEventListener('change', function(e) {{
+        if (!e.target.name) return;
+        var pair = getPairByTarget(e.target);
+        if (!pair || !pair.heater || !pair.ac) return;
+        if (e.target.name.endsWith('_heater')) syncFromHeater(pair.heater, pair.ac);
+        else if (e.target.name.endsWith('_ac')) syncFromAc(pair.heater, pair.ac);
+    }});
+
+    // Normalize all rows on load (in case initial data violates rule)
+    for (var i = 0; i < 4; i++) {{
+        var h = form.querySelector('input[name="schedule_' + i + '_heater"]');
+        var a = form.querySelector('input[name="schedule_' + i + '_ac"]');
+        if (h && a) syncFromHeater(h, a); // ensure AC >= heat at start
+    }}
+
+    // Guarantee posted values are valid on submit
+    form.addEventListener('submit', function() {{
+        for (var i = 0; i < 4; i++) {{
+            var h = form.querySelector('input[name="schedule_' + i + '_heater"]');
+            var a = form.querySelector('input[name="schedule_' + i + '_ac"]');
+            if (!h || !a) continue;
+            var hv = parseFloat(h.value), av = parseFloat(a.value);
+            if (isNaN(hv) || isNaN(av)) continue;
+            if (hv > av) a.value = hv;      // heat up → raise AC
+            if (av < hv) h.value = av;      // AC down → lower heat
         }}
-        function syncFromAc() {{
-            var h = parseFloat(heater.value);
-            var a = parseFloat(ac.value);
-            if (!isNaN(h) && !isNaN(a) && a < h) {{
-                heater.value = a;
-            }}
-        }}
-        heater.addEventListener('input', syncFromHeater);
-        heater.addEventListener('change', syncFromHeater);
-        ac.addEventListener('input', syncFromAc);
-        ac.addEventListener('change', syncFromAc);
     }});
 }});
 </script>
