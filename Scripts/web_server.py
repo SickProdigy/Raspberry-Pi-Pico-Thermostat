@@ -50,7 +50,7 @@ class TempWebServer:
                         content_length = int(line.split(':')[1].strip())
                         break
             
-                        # If POST request with body, read remaining data
+            # If POST request with body, read remaining data
             if 'POST' in request and content_length > 0:
                 # Check how much body we already have
                 header_end = request.find('\r\n\r\n') + 4
@@ -175,8 +175,13 @@ class TempWebServer:
 
             elif 'GET /ping' in request:
                 # Quick health check endpoint (no processing)
-                conn.sendall(b'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n')
-                conn.sendall(b'OK')
+                body = b'OK'
+                conn.sendall(b'HTTP/1.1 200 OK\r\n')
+                conn.sendall(b'Content-Type: text/plain\r\n')
+                conn.sendall(b'Content-Length: 2\r\n')
+                conn.sendall(b'Connection: close\r\n')
+                conn.sendall(b'\r\n')
+                conn.sendall(body)
                 conn.close()
                 return
 
@@ -187,7 +192,7 @@ class TempWebServer:
                 response = self._get_status_page(sensors, ac_monitor, heater_monitor, schedule_monitor)
             
             # ===== START: Send response with proper HTTP headers =====
-            print("DEBUG: Sending response ({} bytes)".format(len(response)))
+            print("DEBUG: Sending response ({} bytes)".format(len(response.encode('utf-8'))))
             try:
                 # Check if response already has HTTP headers (like redirects)
                 if response.startswith('HTTP/1.1'):
@@ -1379,8 +1384,8 @@ document.addEventListener('DOMContentLoaded', function() {{
             schedules.append({
                 'time': '',
                 'name': '',
-                'ac_target': config.get('ac_target', 75.0),      # ✅ Uses 78°F from config
-                'heater_target': config.get('heater_target', 72.0)  # ✅ Uses 70°F from config
+                'ac_target': config.get('ac_target', 75.0),      # default if not set
+                'heater_target': config.get('heater_target', 72.0)  # default if not set
             })
 
         # ===== DEBUG: Verify we have 4 schedules =====
