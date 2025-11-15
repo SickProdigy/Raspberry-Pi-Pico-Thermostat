@@ -63,8 +63,18 @@ def debug_force_send(message):
         except:
             pass
         try:
-            gc.collect()
-            print("DBG_FORCE: mem final:", getattr(gc, "mem_free", lambda: 0)() // 1024, "KB")
+            import sys, gc
+            for m in ('urequests', 'ussl', 'ssl'):
+                if m in sys.modules:
+                    try:
+                        del sys.modules[m]
+                    except:
+                        pass
+            gc.collect(); gc.collect()
+            try:
+                print("DBG_FORCE: mem final:", getattr(gc, "mem_free", lambda: 0)() // 1024, "KB")
+            except:
+                pass
         except:
             pass
 
@@ -174,14 +184,29 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False, de
                 resp.close()
         except:
             pass
+        # remove local refs and unload heavy modules to free peak RAM (urequests, ussl/ssl)
         try:
-            # remove large refs and force GC
             if 'resp' in locals(): del resp
             if 'body_bytes' in locals(): del body_bytes
+            if 'content' in locals(): del content
+            if 'user' in locals(): del user
+            if 'headers' in locals(): del headers
             if 'requests' in locals(): del requests
         except:
             pass
         try:
-            gc.collect()
+            import sys
+            # remove urequests and SSL modules from module cache so their memory can be reclaimed
+            for m in ('urequests', 'ussl', 'ssl'):
+                if m in sys.modules:
+                    try:
+                        del sys.modules[m]
+                    except:
+                        pass
+        except:
+            pass
+        try:
+            import gc
+            gc.collect(); gc.collect()
         except:
             pass
