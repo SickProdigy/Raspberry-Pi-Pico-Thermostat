@@ -411,7 +411,7 @@ while True:
                 mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 90000
                 if mem_ok:
                     try:
-                        ok = discord_webhook.send_discord_message(pending_discord_message)
+                        ok = discord_webhook.send_discord_message(pending_discord_message, debug=True)
                         if ok:
                             print("Discord startup notification sent")
                             discord_sent = True
