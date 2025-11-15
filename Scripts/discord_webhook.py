@@ -56,8 +56,8 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
         # 1b) quick mem check - avoid importing urequests/TLS when too low
         try:
             mem = getattr(gc, "mem_free", lambda: None)()
-            # raised threshold to reduce chance of spike during TLS/requests
-            if mem is not None and mem < 140000:
+            # lower threshold to match this board's free heap (~100 KB observed)
+            if mem is not None and mem < 90000:
                 return False
         except:
             pass

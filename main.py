@@ -408,7 +408,7 @@ while True:
                 _gc.collect()
                 _gc.collect()
                 # require a conservative free memory threshold before TLS (adjust to your device)
-                mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 140000
+                mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 90000
                 if mem_ok:
                     try:
                         ok = discord_webhook.send_discord_message(pending_discord_message)
