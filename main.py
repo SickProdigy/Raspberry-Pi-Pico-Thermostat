@@ -201,7 +201,7 @@ if wifi and wifi.isconnected():
     gc.collect()
     ram_free = gc.mem_free()
     print(f"DEBUG: Free RAM before Discord send: {ram_free // 1024} KB")
-    mem_ok = ram_free > 105000
+    mem_ok = ram_free > 95000
     if mem_ok:
         ok = discord_webhook.send_discord_message("Pico W online at http://{}".format(ifconfig[0]), debug=False)
         if ok:

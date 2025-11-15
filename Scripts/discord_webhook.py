@@ -60,7 +60,7 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False, de
         # Quick mem check before importing urequests/SSL
         mem = getattr(gc, "mem_free", lambda: None)()
         # Require larger headroom based on device testing (adjust if you re-test)
-        if mem is not None and mem < 105000:
+        if mem is not None and mem < 95000:
             print("Discord send skipped: ENOMEM ({} bytes free)".format(mem))
             return False
 
