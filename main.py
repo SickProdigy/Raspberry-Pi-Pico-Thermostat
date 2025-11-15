@@ -407,11 +407,12 @@ while True:
                 # run GC before measuring free memory
                 _gc.collect()
                 _gc.collect()
-                # require a conservative free memory threshold before TLS (adjust to your device)
-                mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 90000
+                # require larger headroom (observed successful test ~174 KB free)
+                mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 140000
                 if mem_ok:
                     try:
-                        ok = discord_webhook.send_discord_message(pending_discord_message, debug=True)
+                        # production send: don't enable verbose debug prints here
+                        ok = discord_webhook.send_discord_message(pending_discord_message, debug=False)
                         if ok:
                             print("Discord startup notification sent")
                             discord_sent = True
@@ -444,13 +445,13 @@ while True:
                 print("Daily NTP re-sync failed (will retry tomorrow)")
         # ===== END: PERIODIC RE-SYNC =====
         
-        # ===== ADD THIS: AGGRESSIVE GARBAGE COLLECTION =====
+        # Aggressive GC without frequent console noise
         current_time = time.time()
-        if int(current_time) % 5 == 0:  # Every 5 seconds
+        if int(current_time) % 5 == 0:
             gc.collect()
-            # Optional: Print memory stats occasionally
-            if int(current_time) % 60 == 0:  # Every minute
-                print("💾 Memory free: {} KB".format(gc.mem_free() // 1024))
+        # Print memory stats infrequently (every 10 minutes)
+        if int(current_time) % 600 == 0:
+            print("Memory free: {} KB".format(gc.mem_free() // 1024))
         # ===== END: AGGRESSIVE GC =====
         time.sleep(0.1)
         

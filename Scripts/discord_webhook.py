@@ -121,33 +121,23 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False, de
         import time  # type: ignore
 
         gc.collect(); gc.collect()
-        if debug:
-            try: print("DBG: mem after gc:", gc.mem_free() // 1024, "KB")
-            except: pass
 
         # Quick mem check before importing urequests/SSL
         mem = getattr(gc, "mem_free", lambda: None)()
-        if debug:
-            try: print("DBG: mem before import check:", (mem or 0) // 1024, "KB")
-            except: pass
-
-        # Conservative threshold — adjust as needed
-        if mem is not None and mem < 90000:
-            if debug: print("DBG: skip send (low mem)")
+        # Require larger headroom based on device testing (adjust if you re-test)
+        if mem is not None and mem < 150000:
+            # quietly skip send when memory is insufficient
             return False
 
         # Import urequests only when we plan to send
         try:
-            if debug: print("DBG: importing urequests...")
             import urequests as requests  # type: ignore
-        except Exception as e:
-            # Back off when import fails (likely low-memory)
+        except Exception:
             try:
                 _NEXT_ALLOWED_SEND_TS = time.time() + 60
             except:
                 pass
-            if debug: print("DBG: urequests import failed:", e)
-            print("Discord webhook import failed (backing off)")
+            # quiet failure to avoid spamming serial; caller can check return value
             return False
 
         gc.collect()
@@ -162,15 +152,7 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False, de
         body_bytes = ('{"content":"%s","username":"%s"}' % (content, user)).encode("utf-8")
         headers = {"Content-Type": "application/json"}
 
-        if debug:
-            try: print("DBG: mem before post:", gc.mem_free() // 1024, "KB")
-            except: pass
-
         resp = requests.post(url, data=body_bytes, headers=headers)
-
-        if debug:
-            try: print("DBG: mem after post:", gc.mem_free() // 1024, "KB", "status:", getattr(resp, "status", None))
-            except: pass
 
         status = getattr(resp, "status", getattr(resp, "status_code", None))
         return bool(status and 200 <= status < 300)
@@ -183,10 +165,7 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False, de
                 _NEXT_ALLOWED_SEND_TS = time.time() + 60
         except:
             pass
-        if debug:
-            try: print("DBG: exception in send:", e)
-            except: pass
-        print("Discord webhook exception (backing off)")
+        # quiet exception path; return False for caller to handle/backoff
         return False
 
     finally:
@@ -203,7 +182,6 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False, de
         except:
             pass
         try:
-            import gc as _gc  # type: ignore
-            _gc.collect()
+            gc.collect()
         except:
             pass
