@@ -51,16 +51,24 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
         # 1) Free heap before TLS
         import gc  # type: ignore
         gc.collect()
+        gc.collect()  # run twice as a precaution
+
+        # 1b) quick mem check - avoid importing urequests/TLS when too low
         try:
-            # If MicroPython provides mem_free, skip send if heap is very low
-            # TLS can be spiky and fragmented; be conservative.
-            if hasattr(gc, "mem_free") and gc.mem_free() < 100000:  # ~100KB threshold
+            mem = getattr(gc, "mem_free", lambda: None)()
+            if mem is not None and mem < 90000:  # conservative threshold (adjust to your board)
                 return False
         except:
             pass
 
-        # 2) Import urequests locally (keeps RAM free when idle)
-        import urequests as requests  # type: ignore
+        try:
+            # 2) Import urequests locally (keeps RAM free when idle)
+            import urequests as requests  # type: ignore
+        except Exception as e:
+            # if import fails due to ENOMEM or missing module, back off
+            print("Discord webhook import failed:", e)
+            return False
+
         gc.collect()  # collect again after import to reduce fragmentation
 
         # 3) Keep payload tiny
@@ -97,7 +105,13 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
             pass
         # Free refs and force GC
         try:
-            del resp, body_bytes, requests
+            # only delete names if they exist
+            if 'resp' in locals():
+                del resp
+            if 'body_bytes' in locals():
+                del body_bytes
+            if 'requests' in locals():
+                del requests
         except:
             pass
         try:

@@ -200,16 +200,16 @@ if wifi and wifi.isconnected():
     print(f"Web Interface:  http://{ifconfig[0]}")
     print("="*50 + "\n")
     
-    # Send startup notification to Discord (with timeout, non-blocking)
+    # Send startup notification to Discord (schedule for later to avoid ENOMEM)
     try:
-        gc.collect()  # free heap before HTTPS
-        success = discord_webhook.send_discord_message(f"Pico W online at http://{ifconfig[0]} ✅")
-        if success:
-            print("Discord startup notification sent")
-        else:
-            print("Discord startup notification failed (continuing anyway)")
+        gc.collect()  # free heap before HTTPS attempt
+        # don't attempt HTTP/TLS immediately — schedule for retry from main loop
+        pending_discord_message = "Pico W online at http://{}".format(ifconfig[0])
+        discord_send_attempts = 0
+        discord_sent = False
+        print("Startup discord message queued (will send when memory available)")
     except Exception as e:
-        print("Discord notification error: {}".format(e))
+        print("Discord notification scheduling error: {}".format(e))
     
     # Start web server early so page can load even if time sync is slow
     web_server = TempWebServer(port=80)
@@ -233,6 +233,8 @@ else:
     print("WiFi Connection Failed!")
     print("="*50 + "\n")
 # ===== END: WiFi Connection =====
+
+
 
 # ===== START: Sensor Configuration =====
 # Define all temperature sensors and their alert thresholds
@@ -398,6 +400,31 @@ last_ntp_sync = time.time()  # Track when we last synced
 # Main monitoring loop (runs forever until Ctrl+C)
 while True:
     try:
+        # Try to send pending discord startup message when memory permits
+        try:
+            if not globals().get('discord_sent', True) and globals().get('pending_discord_message'):
+                import gc as _gc  # type: ignore
+                # require a conservative free memory threshold before TLS (adjust to your device)
+                mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 90000
+                if mem_ok:
+                    try:
+                        ok = discord_webhook.send_discord_message(pending_discord_message)
+                        if ok:
+                            print("Discord startup notification sent")
+                            discord_sent = True
+                        else:
+                            discord_send_attempts += 1
+                            if discord_send_attempts >= 3:
+                                print("Discord startup notification failed after retries")
+                                discord_sent = True
+                    except Exception as e:
+                        print("Discord notification error: {}".format(e))
+                        discord_send_attempts += 1
+                        if discord_send_attempts >= 3:
+                            discord_sent = True
+        except Exception:
+            pass
+
         # Run all monitors (each checks if it's time to run via should_run())
         run_monitors(monitors)
 
