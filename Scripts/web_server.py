@@ -194,6 +194,8 @@ class TempWebServer:
                 print("ERROR: Failed to send response: {}".format(e))
             finally:
                 conn.close()
+                import gc  # type: ignore
+                gc.collect()
                 print("DEBUG: Client connection closed")
             # ===== END: Send response =====
 
@@ -266,7 +268,8 @@ class TempWebServer:
 
     def _handle_schedule_update(self, request, sensors, ac_monitor, heater_monitor, schedule_monitor, config):
         """Handle schedule form submission."""
-
+        import gc  # type: ignore
+        gc.collect()
         try:
             body = request.split('\r\n\r\n')[1] if '\r\n\r\n' in request else ''
             params = {}
@@ -280,6 +283,7 @@ class TempWebServer:
             mode_action = params.get('mode_action', '')
             
             if mode_action == 'resume':
+                gc.collect()
                 # Resume automatic scheduling
                 config['schedule_enabled'] = True
                 config['permanent_hold'] = False
@@ -313,6 +317,7 @@ class TempWebServer:
                 return redirect_response
             
             elif mode_action == 'temporary_hold':
+                gc.collect()
                 # Enter temporary hold (pause schedules temporarily)
                 config['schedule_enabled'] = False
                 config['permanent_hold'] = False
@@ -337,6 +342,7 @@ class TempWebServer:
                 return redirect_response
             
             elif mode_action == 'permanent_hold':
+                gc.collect()
                 # Enter permanent hold (disable schedules permanently)
                 config['schedule_enabled'] = False
                 config['permanent_hold'] = True
@@ -362,6 +368,7 @@ class TempWebServer:
                 return redirect_response
             
             elif mode_action == 'save_schedules':
+                gc.collect()
                 # Just fall through to schedule parsing below
                 pass
             # ===== END: Handle mode actions =====
@@ -371,12 +378,6 @@ class TempWebServer:
             prev_schedules = prev.get('schedules', [])
 
             # ===== START: Handle schedule configuration save =====
-            # DEBUG: Print what we received
-            print("DEBUG: Received POST body parameters:")
-            for key, value in params.items():
-                print("  {} = '{}'".format(key, value))
-            print("DEBUG: Total params received: {}".format(len(params)))
-            
             # Parse schedules (4 slots)
             schedules = []
             has_any_schedule_data = False
@@ -483,8 +484,6 @@ class TempWebServer:
                         'heater_target': heater_target
                     }
                     schedules.append(schedule)
-                    print("DEBUG: Parsed schedule {}: time='{}', name='{}', heater={}, ac={}".format(
-                        i, schedule_time, schedule_name, heater_target, ac_target))
             
             # Only update schedules if user submitted schedule form data
             if has_any_schedule_data:
@@ -538,7 +537,7 @@ class TempWebServer:
                 if heater_monitor:
                     heater_monitor.target_temp = config['heater_target']
                     heater_monitor.temp_swing = config['heater_swing']
-            
+            gc.collect()
             # Send Discord notification
             try:
                 mode = "automatic" if config.get('schedule_enabled') else "hold"
@@ -560,6 +559,7 @@ class TempWebServer:
             redirect_response += 'Expires: 0\r\n'
             redirect_response += '\r\n'
             print("DEBUG: Returning redirect to dashboard (with cache-busting)")
+            gc.collect()
             return redirect_response
             
         except Exception as e:
@@ -1343,6 +1343,8 @@ document.addEventListener('DOMContentLoaded', function() {{
     def _get_schedule_editor_page(self, sensors, ac_monitor, heater_monitor):
         """Generate schedule editor page (no auto-refresh, schedules only)."""
         # Get current temps (read if not cached)
+        import gc  # type: ignore
+        gc.collect()
         inside_temp = getattr(sensors.get('inside'), 'last_temp', None)
         if inside_temp is None:
             inside_temps = sensors['inside'].read_all_temps(unit='F')
@@ -1410,8 +1412,6 @@ document.addEventListener('DOMContentLoaded', function() {{
             # Add required attribute to force validation
             schedule_inputs += "<input type=\"number\" name=\"schedule_" + str(i) + "_ac\" value=\"" + str(ac_value) + "\" step=\"0.5\" min=\"60\" max=\"90\" required oninput=\"schedSync(" + str(i) + ", 'ac')\" onchange=\"schedSync(" + str(i) + ", 'ac')\">\n"
             schedule_inputs += '</div>\n'
-            
-            print("DEBUG:   HTML generated, length now: {} bytes".format(len(schedule_inputs)))
         
         html = """
     <!DOCTYPE html>
@@ -1616,7 +1616,8 @@ document.addEventListener('DOMContentLoaded', function() {{
     def _get_settings_page(self, sensors, ac_monitor, heater_monitor):
         """Generate advanced settings page."""
         config = self._load_config()
-        
+        import gc  # type: ignore
+        gc.collect()
         # Get temperatures (read if not cached)
         inside_temp = getattr(sensors.get('inside'), 'last_temp', None)
         if inside_temp is None:
@@ -1791,6 +1792,8 @@ document.addEventListener('DOMContentLoaded', function() {{
 
     def _handle_settings_update(self, request, sensors, ac_monitor, heater_monitor, schedule_monitor, config):
         """Handle advanced settings update."""
+        import gc  # type: ignore
+        gc.collect()
         try:
             body = request.split('\r\n\r\n')[1] if '\r\n\r\n' in request else ''
             params = {}
@@ -1857,4 +1860,5 @@ document.addEventListener('DOMContentLoaded', function() {{
         redirect_response += 'Content-Length: 0\r\n'
         redirect_response += 'Connection: close\r\n'
         redirect_response += '\r\n'
+        gc.collect()
         return redirect_response
