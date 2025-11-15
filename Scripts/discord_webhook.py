@@ -27,7 +27,7 @@ def _escape_json_str(s: str) -> str:
 
 def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
     """
-    Send Discord message. Import urequests locally to avoid occupying RAM when idle.
+    Send Discord message with aggressive GC and low-memory guard to avoid ENOMEM.
     Returns True on success, False otherwise.
     """
     resp = None
@@ -36,27 +36,35 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
         return False
 
     try:
-        # local import to save RAM
+        # 1) Free heap before TLS
+        import gc  # type: ignore
+        gc.collect()
+        try:
+            # If MicroPython provides mem_free, skip send if heap is very low
+            if hasattr(gc, "mem_free") and gc.mem_free() < 60000:  # ~60KB threshold
+                return False
+        except:
+            pass
+
+        # 2) Import urequests locally (keeps RAM free when idle)
         import urequests as requests  # type: ignore
-        import gc # type: ignore
 
+        # 3) Keep payload tiny
         url = str(url).strip().strip('\'"')
-        content = _escape_json_str(message)
-        user = _escape_json_str(username)
+        content = _escape_json_str(str(message)[:160])
+        user = _escape_json_str(str(username)[:40])
         body_bytes = ('{"content":"%s","username":"%s"}' % (content, user)).encode("utf-8")
-        headers = {"Content-Type": "application/json; charset=utf-8"}
 
+        # Minimal headers to reduce allocations
+        headers = {"Content-Type": "application/json"}
+
+        # 4) Send
         resp = requests.post(url, data=body_bytes, headers=headers)
 
         status = getattr(resp, "status", getattr(resp, "status_code", None))
-        success = bool(status and 200 <= status < 300)
-        if not success:
-            # optional: print status for debugging, but avoid spamming
-            print("Discord webhook failed, status:", status)
-        return success
+        return bool(status and 200 <= status < 300)
 
     except Exception as e:
-        # avoid raising to prevent crashing monitors; print minimal info
         print("Discord webhook exception:", e)
         return False
 
@@ -66,9 +74,9 @@ def send_discord_message(message, username="Auto Garden Bot", is_alert=False):
                 resp.close()
         except:
             pass
-        # free large objects and modules, then force GC
+        # Free refs and force GC
         try:
-            del resp
+            del resp, body_bytes
         except:
             pass
         try:
