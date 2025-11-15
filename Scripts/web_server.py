@@ -1512,17 +1512,17 @@ document.addEventListener('DOMContentLoaded', function() {{
     var form = document.querySelector('form[action="/schedule"]');
     if (!form) return;
 
-    // Return [heaterInput, acInput, whichField] to avoid object literals (fewer braces)
     function getPair(t) {{
         if (!t || !t.name) return null;
-        var m = t.name.match(/^schedule_(\d+)_(heater|ac)$/);
+        var m = t.name.match(/^schedule_(\\d+)_(heater|ac)$/);
         if (!m) return null;
         var i = m[1];
         var which = m[2];
         var h = form.querySelector('input[name="schedule_' + i + '_heater"]');
         var a = form.querySelector('input[name="schedule_' + i + '_ac"]');
+        var last = form.querySelector('input[name="schedule_' + i + '_last_changed"]');
         if (!h || !a) return null;
-        return [h, a, which];
+        return [h, a, which, last];
     }}
 
     function syncFromHeater(h, a) {{
@@ -1535,38 +1535,59 @@ document.addEventListener('DOMContentLoaded', function() {{
         if (!isNaN(hv) && !isNaN(av) && av < hv) h.value = av;
     }}
 
-    // Live sync via event delegation
+    // Live sync + mark last_changed
     form.addEventListener('input', function(e) {{
         var p = getPair(e.target);
         if (!p) return;
-        if (p[2] === 'heater') syncFromHeater(p[0], p[1]);
-        else syncFromAc(p[0], p[1]);
+        var h = p[0], a = p[1], which = p[2], last = p[3];
+        if (which === 'heater') {{
+            if (last) last.value = 'heater';
+            syncFromHeater(h, a);
+        }} else {{
+            if (last) last.value = 'ac';
+            syncFromAc(h, a);
+        }}
     }});
 
     form.addEventListener('change', function(e) {{
         var p = getPair(e.target);
         if (!p) return;
-        if (p[2] === 'heater') syncFromHeater(p[0], p[1]);
-        else syncFromAc(p[0], p[1]);
+        var h = p[0], a = p[1], which = p[2], last = p[3];
+        if (which === 'heater') {{
+            if (last) last.value = 'heater';
+            syncFromHeater(h, a);
+        }} else {{
+            if (last) last.value = 'ac';
+            syncFromAc(h, a);
+        }}
     }});
 
-    // Normalize on load
+    // Normalize on load (ensure AC >= Heat)
     for (var i = 0; i < 4; i++) {{
         var h = form.querySelector('input[name="schedule_' + i + '_heater"]');
         var a = form.querySelector('input[name="schedule_' + i + '_ac"]');
         if (h && a) syncFromHeater(h, a);
     }}
 
-    // Guarantee posted values are valid on submit
+    // Submit-time normalize (use last_changed to decide direction)
     form.addEventListener('submit', function() {{
         for (var i = 0; i < 4; i++) {{
             var h = form.querySelector('input[name="schedule_' + i + '_heater"]');
             var a = form.querySelector('input[name="schedule_' + i + '_ac"]');
+            var last = form.querySelector('input[name="schedule_' + i + '_last_changed"]');
             if (!h || !a) continue;
+
             var hv = parseFloat(h.value), av = parseFloat(a.value);
             if (isNaN(hv) || isNaN(av)) continue;
-            if (hv > av) a.value = hv;   // heat up → raise AC
-            if (av < hv) h.value = av;   // AC down → lower heat
+
+            if (hv > av) {{
+                // Heater above AC: either raise AC or lower Heater based on last edit
+                if (last && last.value === 'ac') {{
+                    h.value = av;   // user lowered AC → match heat down
+                }} else {{
+                    a.value = hv;   // user raised Heat (or unknown) → match AC up
+                }}
+            }}
         }}
     }});
 }});
