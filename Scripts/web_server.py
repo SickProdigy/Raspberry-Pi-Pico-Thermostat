@@ -349,7 +349,11 @@ class TempWebServer:
                 # Just fall through to schedule parsing below
                 pass
             # ===== END: Handle mode actions =====
-            
+
+            # Load previous schedules to compute deltas
+            prev = self._load_config()
+            prev_schedules = prev.get('schedules', [])
+
             # ===== START: Handle schedule configuration save =====
             # DEBUG: Print what we received
             print("DEBUG: Received POST body parameters:")
@@ -427,11 +431,34 @@ class TempWebServer:
                             "Schedule {}: Temperature values must be numbers".format(i+1),
                             sensors, ac_monitor, heater_monitor
                         )
-                    # Auto-sync both ways
-                    if heater_target > ac_target:
-                        ac_target = heater_target
-                    elif ac_target < heater_target:
-                        heater_target = ac_target
+                    # Sync using direction of change (no dependency on last_changed)
+                    prev_h = None
+                    prev_a = None
+                    if i < len(prev_schedules):
+                        try:
+                            prev_h = float(prev_schedules[i].get('heater_target', heater_target))
+                        except:
+                            prev_h = None
+                        try:
+                            prev_a = float(prev_schedules[i].get('ac_target', ac_target))
+                        except:
+                            prev_a = None
+                    delta_h = (heater_target - prev_h) if prev_h is not None else None
+                    delta_a = (ac_target - prev_a) if prev_a is not None else None
+
+                    if ac_target < heater_target:
+                        # AC moved down -> lower heater
+                        if delta_a is not None and delta_a < 0 and (delta_h is None or abs(delta_h) < 1e-9):
+                            heater_target = ac_target
+                        # Heater moved up -> raise AC
+                        elif delta_h is not None and delta_h > 0 and (delta_a is None or abs(delta_a) < 1e-9):
+                            ac_target = heater_target
+                        else:
+                            # Fallback preference: if AC decreased more, lower heater; else raise AC
+                            if delta_a is not None and delta_h is not None and abs(delta_a) > abs(delta_h):
+                                heater_target = ac_target
+                            else:
+                                ac_target = heater_target
                     # Create schedule entry
                     schedule = {
                         'time': schedule_time,
@@ -554,13 +581,28 @@ class TempWebServer:
             new_heater_target = params.get('heater_target', config.get('heater_target', 80.0))
             new_ac_target = params.get('ac_target', config.get('ac_target', 77.0))
             
-            # Auto-sync both ways
-            if new_heater_target > new_ac_target:
-                new_ac_target = new_heater_target
-                params['ac_target'] = new_ac_target
-            elif new_ac_target < new_heater_target:
-                new_heater_target = new_ac_target
-                params['heater_target'] = new_heater_target
+            # Use previous values to detect direction of change
+            old_heater = float(config.get('heater_target', new_heater_target))
+            old_ac = float(config.get('ac_target', new_ac_target))
+
+            # If AC is below heater, sync based on the field that moved
+            if new_ac_target < new_heater_target:
+                # AC moved down: lower heater to AC
+                if new_ac_target < old_ac and new_heater_target == old_heater:
+                    new_heater_target = new_ac_target
+                # Heater moved up: raise AC to heater
+                elif new_heater_target > old_heater and new_ac_target == old_ac:
+                    new_ac_target = new_heater_target
+                else:
+                    # Fallback: prefer AC drop rule, else heater raise
+                    if new_ac_target < old_ac:
+                        new_heater_target = new_ac_target
+                    else:
+                        new_ac_target = new_heater_target
+
+            # Reflect adjusted values back to params
+            params['ac_target'] = new_ac_target
+            params['heater_target'] = new_heater_target
             # ===== END: Validate Heat <= AC =====
             
             # ===== START: Update AC Settings =====
@@ -1336,7 +1378,9 @@ document.addEventListener('DOMContentLoaded', function() {{
             
             # Hidden input to mark this schedule exists (always sent)
             schedule_inputs += '<input type="hidden" name="schedule_' + str(i) + '_exists" value="1">\n'
-            
+            # Hidden marker to record which input was changed last for this row
+            schedule_inputs += '<input type="hidden" name="schedule_' + str(i) + '_last_changed" id="schedule_' + str(i) + '_last_changed" value="">\n'
+
             schedule_inputs += '<label>Time</label>\n'
             schedule_inputs += '<input type="time" name="schedule_' + str(i) + '_time" value="' + str(time_value) + '">\n'
             schedule_inputs += '<label>Name</label>\n'
@@ -1463,32 +1507,33 @@ document.addEventListener('DOMContentLoaded', function() {{
         </div>
 <script>
 document.addEventListener('DOMContentLoaded', function() {{
-    for (var i = 0; i < 4; i++) {{
-        var heaterInput = document.querySelector('input[name="schedule_' + i + '_heater"]');
-        var acInput = document.querySelector('input[name="schedule_' + i + '_ac"]');
-        if (heaterInput && acInput) {{
-            heaterInput.addEventListener('input', function() {{
-                var idx = this.name.match(/\\d+/)[0];
-                var acInput = document.querySelector('input[name="schedule_' + idx + '_ac"]');
-                var heaterVal = parseFloat(this.value);
-                var acVal = parseFloat(acInput.value);
-                if (!isNaN(heaterVal) && heaterVal > acVal) {{
-                    acInput.value = heaterVal;
-                }}
-            }});
-            acInput.addEventListener('input', function() {{
-                var idx = this.name.match(/\\d+/)[0];
-                var heaterInput = document.querySelector('input[name="schedule_' + idx + '_heater"]');
-                var heaterVal = parseFloat(heaterInput.value);
-                var acVal = parseFloat(this.value);
-                if (!isNaN(acVal) && acVal < heaterVal) {{
-                    heaterInput.value = acVal;
-                }}
-            }});
+    // For each schedule row, wire up sync both ways
+    document.querySelectorAll('.sched').forEach(function(row) {{
+        var heater = row.querySelector('input[name$="_heater"]');
+        var ac = row.querySelector('input[name$="_ac"]');
+        if (!heater || !ac) return;
+        function syncFromHeater() {{
+            var h = parseFloat(heater.value);
+            var a = parseFloat(ac.value);
+            if (!isNaN(h) && !isNaN(a) && h > a) {{
+                ac.value = h;
+            }}
         }}
-    }}
+        function syncFromAc() {{
+            var h = parseFloat(heater.value);
+            var a = parseFloat(ac.value);
+            if (!isNaN(h) && !isNaN(a) && a < h) {{
+                heater.value = a;
+            }}
+        }}
+        heater.addEventListener('input', syncFromHeater);
+        heater.addEventListener('change', syncFromHeater);
+        ac.addEventListener('input', syncFromAc);
+        ac.addEventListener('change', syncFromAc);
+    }});
 }});
 </script>
+
     </body>
     </html>
         """.format(
