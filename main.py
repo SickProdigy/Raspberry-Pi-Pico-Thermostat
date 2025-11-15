@@ -22,14 +22,6 @@ except Exception as e:
 # Import after WiFi reset
 from scripts.networking import connect_wifi
 
-from scripts.monitors import TemperatureMonitor, WiFiMonitor, ACMonitor, HeaterMonitor, run_monitors
-from scripts.temperature_sensor import TemperatureSensor
-from scripts.air_conditioning import ACController
-from scripts.heating import HeaterController
-from scripts.web_server import TempWebServer
-from scripts.scheduler import ScheduleMonitor  # NEW: Import scheduler for time-based temp changes
-from scripts.memory_check import check_memory_once  # Just the function
-
 # ===== NEW: NTP Sync Function (imports locally) =====
 def sync_ntp_time(timezone_offset):
     """
@@ -209,7 +201,7 @@ if wifi and wifi.isconnected():
     gc.collect()
     ram_free = gc.mem_free()
     print(f"DEBUG: Free RAM before Discord send: {ram_free // 1024} KB")
-    mem_ok = ram_free > 100000
+    mem_ok = ram_free > 105000
     if mem_ok:
         ok = discord_webhook.send_discord_message("Pico W online at http://{}".format(ifconfig[0]), debug=False)
         if ok:
@@ -223,6 +215,15 @@ if wifi and wifi.isconnected():
         print("Not enough memory for Discord startup notification")
         pending_discord_message = "Pico W online at http://{}".format(ifconfig[0])
         discord_send_attempts = 1
+    
+    # ===== Moved to later so discord could fire off startup message hopefully =====
+    from scripts.monitors import TemperatureMonitor, WiFiMonitor, ACMonitor, HeaterMonitor, run_monitors
+    from scripts.temperature_sensor import TemperatureSensor
+    from scripts.air_conditioning import ACController
+    from scripts.heating import HeaterController
+    from scripts.web_server import TempWebServer
+    from scripts.scheduler import ScheduleMonitor
+    from scripts.memory_check import check_memory_once
     
     # Start web server early so page can load even if time sync is slow
     web_server = TempWebServer(port=80)
@@ -360,47 +361,6 @@ print("="*50 + "\n")
 check_memory_once()
 # ===== END: Startup Memory Check =====
 
-# ===== START: Monitor Setup =====
-# Set up all monitoring systems (run in order during main loop)
-monitors = [
-    # WiFi monitor: Checks connection, reconnects if needed, blinks LED
-    WiFiMonitor(wifi, led, interval=5, reconnect_cooldown=60, config=config),
-    
-    # Schedule monitor: Changes temp targets based on time of day
-    schedule_monitor,
-    
-    # AC monitor: Automatically turns AC on/off based on temperature
-    ac_monitor,
-    
-    # Heater monitor: Automatically turns heater on/off based on temperature
-    heater_monitor,
-    
-    # Inside temperature monitor: Logs temps, sends alerts if out of range
-    TemperatureMonitor(
-        sensor=sensors['inside'],
-        label=SENSOR_CONFIG['inside']['label'],
-        check_interval=10,                                  # Check temp every 10 seconds
-        report_interval=30,                                 # Log to CSV every 30 seconds
-        alert_high=SENSOR_CONFIG['inside']['alert_high'],  # High temp alert threshold
-        alert_low=SENSOR_CONFIG['inside']['alert_low'],    # Low temp alert threshold
-        log_file="/temp_logs.csv",                         # CSV file path
-        send_alerts_to_separate_channel=True               # Use separate Discord channel
-    ),
-    
-    # Outside temperature monitor: Logs temps, sends alerts if out of range
-    TemperatureMonitor(
-        sensor=sensors['outside'],
-        label=SENSOR_CONFIG['outside']['label'],
-        check_interval=10,                                   # Check temp every 10 seconds
-        report_interval=30,                                  # Log to CSV every 30 seconds
-        alert_high=SENSOR_CONFIG['outside']['alert_high'],  # High temp alert threshold
-        alert_low=SENSOR_CONFIG['outside']['alert_low'],    # Low temp alert threshold
-        log_file="/temp_logs.csv",                          # CSV file path
-        send_alerts_to_separate_channel=False               # Use main Discord channel
-    ),
-]
-# ===== END: Monitor Setup =====
-
 print("Starting monitoring loop...")
 print("Press Ctrl+C to stop\n")
 
@@ -411,75 +371,93 @@ last_ntp_sync = time.time()  # Track when we last synced
 
 # ===== START: Main Loop =====
 # Main monitoring loop (runs forever until Ctrl+C)
+last_monitor_run = {
+    "wifi": 0,
+    "schedule": 0,
+    "ac": 0,
+    "heater": 0,
+    "inside_temp": 0,
+    "outside_temp": 0,
+}
+
 while True:
-    try:
-        # Try to send pending discord startup message when memory permits
-        if not discord_sent and pending_discord_message and discord_send_attempts < 3:
-            import gc as _gc  # type: ignore
-            _gc.collect()
-            _gc.collect()
-            mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 100000
-            if mem_ok:
-                try:
-                    ok = discord_webhook.send_discord_message(pending_discord_message, debug=False)
-                    if ok:
-                        print("Discord startup notification sent")
-                        discord_sent = True
-                    else:
-                        discord_send_attempts += 1
-                        if discord_send_attempts >= 3:
-                            print("Discord startup notification failed after retries")
-                            discord_sent = True
-                except Exception:
-                    discord_send_attempts += 1
-                    if discord_send_attempts >= 3:
-                        discord_sent = True
+    now = time.time()
 
-        # Run all monitors (each checks if it's time to run via should_run())
-        run_monitors(monitors)
+    # WiFi monitor every 5 seconds (can be stateless)
+    if now - last_monitor_run["wifi"] >= 5:
+        from scripts.monitors import WiFiMonitor
+        wifi_monitor = WiFiMonitor(wifi, led, interval=5, reconnect_cooldown=60, config=config)
+        try:
+            wifi_monitor.run()
+        except Exception as e:
+            print("WiFiMonitor error:", e)
+        del wifi_monitor
+        gc.collect()
+        last_monitor_run["wifi"] = now
 
-        # Web requests
-        web_server.check_requests(sensors, ac_monitor, heater_monitor, schedule_monitor, config)
+    # Schedule monitor every 60 seconds (persistent)
+    if now - last_monitor_run["schedule"] >= 60:
+        try:
+            schedule_monitor.run()
+        except Exception as e:
+            print("ScheduleMonitor error:", e)
+        last_monitor_run["schedule"] = now
 
-        # ===== PERIODIC RE-SYNC (every 24 hours) =====
-        if ntp_synced and (time.time() - last_ntp_sync) > 86400:
-            print("24-hour re-sync due...")
-            if sync_ntp_time(TIMEZONE_OFFSET):
-                last_ntp_sync = time.time()
-                print("Daily NTP re-sync successful")
-            else:
-                print("Daily NTP re-sync failed (will retry tomorrow)")
-        # ===== END: PERIODIC RE-SYNC =====
-        
-        # Aggressive GC without frequent console noise
-        current_time = time.time()
-        if int(current_time) % 5 == 0:
-            gc.collect()
-        # Print memory stats infrequently (every 10 minutes)
-        if int(current_time) % 600 == 0:
-            print("Memory free: {} KB".format(gc.mem_free() // 1024))
-        # ===== END: AGGRESSIVE GC =====
-        time.sleep(0.1)
-        
-    except KeyboardInterrupt:
-        # Graceful shutdown on Ctrl+C
-        print("\n\n" + "="*50)
-        print("Shutting down gracefully...")
-        print("="*50)
-        print("Turning off AC...")
-        ac_controller.turn_off()
-        print("Turning off heater...")
-        heater_controller.turn_off()
-        print("Turning off LED...")
-        led.low()
-        print("Shutdown complete!")
-        print("="*50 + "\n")
-        break
-        
-    except Exception as e:
-        # If loop crashes, print error and keep running
-        print("❌ Main loop error: {}".format(e))
-        import sys
-        sys.print_exception(e)
-        time.sleep(5)  # Brief pause before retrying
+    # AC monitor every 30 seconds (persistent)
+    if now - last_monitor_run["ac"] >= 30:
+        try:
+            ac_monitor.run()
+        except Exception as e:
+            print("ACMonitor error:", e)
+        last_monitor_run["ac"] = now
+
+    # Heater monitor every 30 seconds (persistent)
+    if now - last_monitor_run["heater"] >= 30:
+        try:
+            heater_monitor.run()
+        except Exception as e:
+            print("HeaterMonitor error:", e)
+        last_monitor_run["heater"] = now
+
+    # Inside temperature monitor every 10 seconds (can be stateless)
+    if now - last_monitor_run["inside_temp"] >= 10:
+        from scripts.monitors import TemperatureMonitor
+        inside_monitor = TemperatureMonitor(
+            sensor=sensors['inside'],
+            label=SENSOR_CONFIG['inside']['label'],
+            check_interval=10,
+            report_interval=30,
+            alert_high=SENSOR_CONFIG['inside']['alert_high'],
+            alert_low=SENSOR_CONFIG['inside']['alert_low'],
+            log_file="/temp_logs.csv",
+            send_alerts_to_separate_channel=True
+        )
+        inside_monitor.run()
+        del inside_monitor
+        gc.collect()
+        last_monitor_run["inside_temp"] = now
+
+    # Outside temperature monitor every 10 seconds (can be stateless)
+    if now - last_monitor_run["outside_temp"] >= 10:
+        from scripts.monitors import TemperatureMonitor
+        outside_monitor = TemperatureMonitor(
+            sensor=sensors['outside'],
+            label=SENSOR_CONFIG['outside']['label'],
+            check_interval=10,
+            report_interval=30,
+            alert_high=SENSOR_CONFIG['outside']['alert_high'],
+            alert_low=SENSOR_CONFIG['outside']['alert_low'],
+            log_file="/temp_logs.csv",
+            send_alerts_to_separate_channel=False
+        )
+        outside_monitor.run()
+        del outside_monitor
+        gc.collect()
+        last_monitor_run["outside_temp"] = now
+
+    # Web requests (keep web server loaded if needed)
+    web_server.check_requests(sensors, ac_monitor, heater_monitor, schedule_monitor, config)
+
+    gc.collect()
+    time.sleep(0.1)
 # ===== END: Main Loop =====
