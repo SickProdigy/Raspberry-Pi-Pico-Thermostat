@@ -207,7 +207,9 @@ if wifi and wifi.isconnected():
     
     # Try sending Discord webhook NOW, before creating other objects
     gc.collect()
-    mem_ok = gc.mem_free() > 120000
+    ram_free = gc.mem_free()
+    print(f"DEBUG: Free RAM before Discord send: {ram_free // 1024} KB")
+    mem_ok = ram_free > 100000
     if mem_ok:
         ok = discord_webhook.send_discord_message("Pico W online at http://{}".format(ifconfig[0]), debug=False)
         if ok:
@@ -416,7 +418,7 @@ while True:
             import gc as _gc  # type: ignore
             _gc.collect()
             _gc.collect()
-            mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 120000
+            mem_ok = getattr(_gc, 'mem_free', lambda: 0)() > 100000
             if mem_ok:
                 try:
                     ok = discord_webhook.send_discord_message(pending_discord_message, debug=False)
