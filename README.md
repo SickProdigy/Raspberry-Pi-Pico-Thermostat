@@ -1,5 +1,3 @@
-
-
 # 🌡️ Raspberry Pi Pico Thermostat
 
 > **Forked from [Auto-Garden](https://gitea.rcs1.top/sickprodigy/Auto-Garden)**
@@ -153,56 +151,28 @@ RUN pin  →  Button  →  GND
 
 ### 4. Configuration
 
-**Create `secrets.py`** (copy from `secrets.example.py`):
+**Edit `config.json`** (created automatically on first boot, or edit manually):
 
-```python
-secrets = {
-    'ssid': 'YOUR_WIFI_NAME',
-    'password': 'YOUR_WIFI_PASSWORD',
-    'discord_webhook_url': 'https://discord.com/api/webhooks/...',
-    'discord_alert_webhook_url': 'https://discord.com/api/webhooks/...',
-}
-```
-
-**Sensor Configuration in `main.py`:**
-
-```python
-# Sensor configuration
-SENSOR_CONFIG = {
-    'inside': {
-        'pin': 10,
-        'label': 'Inside',
-        'alert_high': 80.0,
-        'alert_low': 70.0
-    },
-    'outside': {
-        'pin': 11,
-        'label': 'Outside',
-        'alert_high': 85.0,
-        'alert_low': 68.0
-    }
-}
-```
-
-**Default Climate Settings (auto-saved to config.json):**
-
-```python
-# Default config (created on first boot)
+```json
 {
-    "ac_target": 77.0,           # AC target temperature (°F)
-    "ac_swing": 1.0,             # AC turns on at 78°F, off at 76°F
-    "heater_target": 72.0,       # Heater target temperature (°F)
-    "heater_swing": 2.0,         # Heater turns on at 70°F, off at 74°F
-    "temp_hold_duration": 3600,  # Temporary hold lasts 1 hour (3600 seconds)
-    "schedule_enabled": true,    # Schedules active by default
-    "schedules": [               # 4 time-based schedules
+    "ssid": "YOUR_WIFI_NAME",
+    "password": "YOUR_WIFI_PASSWORD",
+    "discord_webhook_url": "https://discord.com/api/webhooks/...",
+    "discord_alert_webhook_url": "https://discord.com/api/webhooks/...",
+    "ac_target": 77.0,
+    "ac_swing": 1.0,
+    "heater_target": 72.0,
+    "heater_swing": 2.0,
+    "temp_hold_duration": 3600,
+    "schedule_enabled": true,
+    "schedules": [
         {
             "time": "06:00",
             "name": "Morning",
             "ac_target": 75.0,
             "heater_target": 72.0
-        },
-        # ... 3 more schedules
+        }
+        // ... 3 more schedules
     ]
 }
 ```
@@ -211,12 +181,11 @@ All settings can be changed via the web interface and persist through reboots.
 
 ### 5. Upload & Run
 
-Upload all files to your Pico:
+**Upload all files to your Pico:**
 
 ```text
-/
+/ 
 ├── main.py
-├── secrets.py
 ├── config.json              # Auto-generated on first boot
 └── scripts/
     ├── air_conditioning.py   # AC/Heater controller classes
@@ -236,9 +205,7 @@ The Pico will auto-start `main.py` on boot and be accessible at **<http://192.16
 ```text
 Raspberry-Pi-Pico-Thermostat/
 ├── main.py                      # Entry point, configuration, system initialization
-├── secrets.py                   # WiFi & Discord credentials (gitignored)
-├── secrets.example.py           # Template for secrets.py
-├── config.json                  # Persistent configuration (auto-generated)
+├── config.json                  # Persistent configuration and credentials (auto-generated)
 └── scripts/
   ├── air_conditioning.py      # AC & Heater controllers with short-cycle protection
   ├── discord_webhook.py       # Discord notification handling
@@ -460,14 +427,14 @@ report_interval=30     # Discord report frequency
 
 **WiFi not connecting:**
 
-- Verify SSID/password in `secrets.py`
+- Verify SSID/password in `config.json`
 - Check 2.4GHz WiFi (Pico W doesn't support 5GHz)
 - LED should be solid when connected
 - Check serial console for connection status
 
 **Discord messages not sending:**
 
-- Verify webhook URLs in `secrets.py`
+- Verify webhook URLs in `config.json`
 - Test webhooks with curl/Postman first
 - Check Pico has internet access (ping test)
 - Look for error messages in serial console
