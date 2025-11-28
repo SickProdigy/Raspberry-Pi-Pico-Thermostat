@@ -1,15 +1,21 @@
-# 🌱 Auto Garden
 
-> Automated climate control system using Raspberry Pi Pico W with web interface and scheduling
+
+# 🌡️ Raspberry Pi Pico Thermostat
+
+> **Forked from [Auto-Garden](https://gitea.rcs1.top/sickprodigy/Auto-Garden)**
+
+> Smart thermostat and climate control system using Raspberry Pi Pico W with web interface, scheduling, and relay control
+
 
 ## Recent Updates
 
-- 🆕 **Immediate schedule application:** When resuming scheduling from hold mode, the system now instantly applies the current schedule targets (no delay).
+- 🆕 **Immediate schedule application:** When resuming scheduling from hold mode, the thermostat instantly applies the current schedule targets (no delay).
 - 🆕 **Aggressive memory management:** Garbage collection runs every 5 seconds for improved reliability.
 - 🆕 **Manual hold settings:** `ac_target` and `heater_target` in `config.json` now only store your last manual hold settings, not schedule targets.
 - 🆕 **NTP sync optimization:** NTP modules are loaded only when needed, saving RAM.
 - 🆕 **Temperature validation:** Impossible sensor readings are ignored for safety.
 - 🆕 **Improved config persistence:** All changes are saved and reloaded immediately.
+
 
 ## Features
 
@@ -24,9 +30,8 @@
   - ✅ Graceful shutdown with Ctrl+C
   - ✅ **Aggressive garbage collection for stability**
 
-- **Climate Control**
-  - ✅ Automated AC control with temperature swing logic
-  - ✅ Automated heater control with separate swing settings
+- **Thermostat Control**
+  - ✅ Automated AC and heater control with temperature swing logic
   - ✅ Short-cycle protection for both AC and heater
   - ✅ Dual relay control via opto-coupler for 110V AC
   - ✅ Mutual exclusion (AC and heater never run simultaneously)
@@ -53,6 +58,7 @@
   - ✅ Auto-refresh dashboard (30 seconds)
   - ✅ **Settings and schedule changes are reflected instantly**
 
+
 ## Configuration Notes
 
 - **AC/Heater target settings:**  
@@ -61,13 +67,14 @@
   - This ensures the config file always reflects the current operating temperatures, whether in hold mode or schedule mode.
 
 - **Immediate schedule application:**  
-  - When you click "Resume Scheduling," the system applies the current schedule targets instantly, so the dashboard updates without delay.
+  - When you click "Resume Scheduling," the thermostat applies the current schedule targets instantly, so the dashboard updates without delay.
 
 - **Memory management:**  
   - Garbage collection runs every 5 seconds to prevent memory fragmentation and crashes.
 
 - **Sensor validation:**  
   - Temperatures outside the range -50°F to 150°F are ignored to prevent false readings.
+
 
 ## Quick Start
 
@@ -223,23 +230,25 @@ Upload all files to your Pico:
 
 The Pico will auto-start `main.py` on boot and be accessible at **<http://192.168.x.x>**
 
+
 ## Project Structure
 
 ```text
-Auto-Garden/
+Raspberry-Pi-Pico-Thermostat/
 ├── main.py                      # Entry point, configuration, system initialization
 ├── secrets.py                   # WiFi & Discord credentials (gitignored)
 ├── secrets.example.py           # Template for secrets.py
 ├── config.json                  # Persistent configuration (auto-generated)
 └── scripts/
-    ├── air_conditioning.py      # AC & Heater controllers with short-cycle protection
-    ├── discord_webhook.py       # Discord notification handling
-    ├── monitors.py              # Monitor base class & implementations
-    ├── networking.py            # WiFi connection management
-    ├── scheduler.py             # Schedule system with temporary/permanent hold modes
-    ├── temperature_sensor.py    # DS18B20 sensor interface
-    └── web_server.py            # Web interface for monitoring and control
+  ├── air_conditioning.py      # AC & Heater controllers with short-cycle protection
+  ├── discord_webhook.py       # Discord notification handling
+  ├── monitors.py              # Monitor base class & implementations
+  ├── networking.py            # WiFi connection management
+  ├── scheduler.py             # Schedule system with temporary/permanent hold modes
+  ├── temperature_sensor.py    # DS18B20 sensor interface
+  └── web_server.py            # Web interface for monitoring and control
 ```
+
 
 ## How It Works
 
@@ -354,6 +363,7 @@ Access at **<http://192.168.x.x>**
 - **Auto-reconnect:** Attempts every 60 seconds if disconnected
 - **Static IP:** Always accessible at <http://192.168.x.x>
 
+
 ## Temperature Logs
 
 Logs are saved to `/temp_logs.csv` on the Pico:
@@ -364,6 +374,7 @@ Logs are saved to `/temp_logs.csv` on the Pico:
 ```
 
 Format: `timestamp,location,sensor_id,temperature_f`
+
 
 ## Customization
 
@@ -405,6 +416,7 @@ check_interval=10      # Temperature check frequency
 report_interval=30     # Discord report frequency
 ```
 
+
 ## Safety Notes
 
 ⚠️ **High Voltage Warning:**
@@ -428,6 +440,7 @@ report_interval=30     # Discord report frequency
 - Graceful shutdown (Ctrl+C) safely turns off AC/heater
 - Hold modes reset on reboot (schedules always resume)
 - Static IP ensures web interface always accessible
+
 
 ## Troubleshooting
 
@@ -501,13 +514,16 @@ report_interval=30     # Discord report frequency
 - Ensure config.json has write permissions
 - Try manual edit of config.json and reboot
 
+
 ## Contributing
 
 Feel free to open issues or submit pull requests for improvements!
 
+
 ## License
 
 MIT License - See LICENSE file for details
+
 
 ## Resources
 
