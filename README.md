@@ -1,6 +1,6 @@
 # 🌡️ Raspberry Pi Pico Thermostat
 
-> **Forked from [Auto-Garden](https://gitea.rcs1.top/sickprodigy/Auto-Garden)**
+> **Forked from [Auto-Garden](https://gitea.rcs1.top/sickprodigy/Auto-Garden); [Commit c8102e62ee](https://gitea.rcs1.top/sickprodigy/Auto-Garden/commit/c8102e62ee8c3b8cf60a57654bab7703df2f27af)**
 
 > Smart thermostat and climate control system using Raspberry Pi Pico W with web interface, scheduling, and relay control
 
